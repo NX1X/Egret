@@ -93,11 +93,12 @@ jobs:
           subject-path: "egret_linux_amd64, SHA256SUMS"
 
       # Keyless cosign signature of SHA256SUMS (Sigstore: a short-lived Fulcio cert
-      # bound to this workflow's OIDC identity + a Rekor transparency-log entry — no
-      # private key to store or rotate). SHA256SUMS already covers the binary, so
-      # signing it transitively signs the binary — PROVIDED the consumer also checks
-      # the binary against it. Full verify of a download:
-      #   cosign verify-blob --certificate SHA256SUMS.pem --signature SHA256SUMS.sig \
+      # bound to this workflow's OIDC identity + a Rekor transparency-log entry, no
+      # private key to store or rotate). cosign v3+ emits ONE Sigstore bundle
+      # (signature + certificate + tlog entry) via --bundle. SHA256SUMS already covers
+      # the binary, so signing it transitively signs the binary, PROVIDED the consumer
+      # also checks the binary against it. Full verify of a download:
+      #   cosign verify-blob --bundle SHA256SUMS.bundle \
       #     --certificate-identity-regexp '^https://github.com/NX1X/Egret/\.github/workflows/release\.yml@.*' \
       #     --certificate-oidc-issuer https://token.actions.githubusercontent.com SHA256SUMS
       #   sha256sum -c SHA256SUMS         # <-- ties the signed digest to the binary
@@ -106,8 +107,7 @@ jobs:
       - name: Sign SHA256SUMS (keyless)
         run: |
           cosign sign-blob --yes \
-            --output-signature SHA256SUMS.sig \
-            --output-certificate SHA256SUMS.pem \
+            --bundle SHA256SUMS.bundle \
             SHA256SUMS
 
       - name: Create or update GitHub Release
@@ -117,12 +117,12 @@ jobs:
           # Idempotent so a manual re-run of an existing tag republishes cleanly:
           # if the Release already exists, re-upload assets (--clobber); else create it.
           if gh release view "${TAG}" >/dev/null 2>&1; then
-            echo "Release ${TAG} already exists — re-uploading assets (--clobber)."
+            echo "Release ${TAG} already exists - re-uploading assets (--clobber)."
             gh release upload "${TAG}" \
-              egret_linux_amd64 SHA256SUMS SHA256SUMS.sig SHA256SUMS.pem --clobber
+              egret_linux_amd64 SHA256SUMS SHA256SUMS.bundle --clobber
           else
             gh release create "${TAG}" \
-              egret_linux_amd64 SHA256SUMS SHA256SUMS.sig SHA256SUMS.pem \
+              egret_linux_amd64 SHA256SUMS SHA256SUMS.bundle \
               --title "${TAG}" \
               --generate-notes \
               --verify-tag
@@ -131,8 +131,8 @@ jobs:
   # Two independent verification paths ship with every release:
   #   1. SLSA build provenance (actions/attest-build-provenance):
   #        gh attestation verify egret_linux_amd64 --repo NX1X/Egret
-  #   2. Keyless cosign signature of SHA256SUMS (SHA256SUMS.sig + SHA256SUMS.pem):
-  #        cosign verify-blob --certificate SHA256SUMS.pem --signature SHA256SUMS.sig \
+  #   2. Keyless cosign signature of SHA256SUMS (SHA256SUMS.bundle):
+  #        cosign verify-blob --bundle SHA256SUMS.bundle \
   #          --certificate-identity-regexp '^https://github.com/NX1X/Egret/\.github/workflows/release\.yml@.*' \
   #          --certificate-oidc-issuer https://token.actions.githubusercontent.com SHA256SUMS
   #        sha256sum -c SHA256SUMS      # then confirm the binary matches the signed digest
