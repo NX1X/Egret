@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-label="Egret — runtime egress security for CI/CD">
+  <title>Egret</title>
+  <defs>
+    <linearGradient id="pbg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#13293D"/>
+      <stop offset="1" stop-color="#08131F"/>
+    </linearGradient>
+    <linearGradient id="pline" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#2DD4BF" stop-opacity="0"/>
+      <stop offset="1" stop-color="#2DD4BF"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1280" height="640" fill="url(#pbg)"/>
+  <!-- faint egress traffic lines -->
+  <g stroke="url(#pline)" stroke-width="2" opacity="0.18">
+    <line x1="0" y1="150" x2="1280" y2="150"/>
+    <line x1="0" y1="230" x2="1280" y2="230"/>
+    <line x1="0" y1="470" x2="1280" y2="470"/>
+    <line x1="0" y1="540" x2="1280" y2="540"/>
+  </g>
+
+  <!-- icon mark -->
+  <g transform="translate(150,190) scale(1.0)">
+    <rect x="0" y="0" width="256" height="256" rx="56" fill="#0B1B2B" stroke="#1E3A52" stroke-width="2"/>
+    <line x1="40" y1="196" x2="216" y2="196" stroke="#2DD4BF" stroke-width="6" stroke-linecap="round"/>
+    <circle cx="216" cy="196" r="7" fill="#2DD4BF"/>
+    <g fill="none" stroke="#F5F7FA" stroke-width="13" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M120 188 C104 156 150 150 138 112 C132 92 150 78 168 80"/>
+      <path d="M120 188 C96 184 84 168 96 150 C108 134 140 138 150 118" stroke-width="15"/>
+    </g>
+    <circle cx="171" cy="79" r="12" fill="#F5F7FA"/>
+    <path d="M182 76 L214 66 L184 86 Z" fill="#F5B54B"/>
+    <path d="M166 70 C176 52 190 46 206 44" fill="none" stroke="#F5F7FA" stroke-width="6" stroke-linecap="round"/>
+    <g stroke="#F5F7FA" stroke-width="7" stroke-linecap="round">
+      <line x1="112" y1="186" x2="108" y2="212"/>
+      <line x1="126" y1="186" x2="130" y2="212"/>
+    </g>
+  </g>
+
+  <!-- title block -->
+  <text x="470" y="270" font-family="'Space Grotesk','Inter Tight',Inter,system-ui,sans-serif"
+        font-size="128" font-weight="700" letter-spacing="-3" fill="#F5F7FA">Egret</text>
+  <text x="474" y="330" font-family="Inter,system-ui,sans-serif"
+        font-size="34" font-weight="500" fill="#2DD4BF">Runtime egress security for CI/CD &amp; Linux hosts</text>
+
+  <!-- feature chips -->
+  <g font-family="Inter,system-ui,sans-serif" font-size="24" font-weight="600" fill="#CBD5E1">
+    <rect x="474" y="372" width="230" height="52" rx="26" fill="#0B1B2B" stroke="#234"/>
+    <text x="500" y="405">eBPF egress filter</text>
+    <rect x="722" y="372" width="200" height="52" rx="26" fill="#0B1B2B" stroke="#234"/>
+    <text x="748" y="405">audit → policy</text>
+    <rect x="940" y="372" width="170" height="52" rx="26" fill="#0B1B2B" stroke="#234"/>
+    <text x="966" y="405">GitHub Action</text>
+  </g>
+
+  <text x="474" y="470" font-family="Inter,system-ui,sans-serif" font-size="22" fill="#7C93A8">
+    No server · no account · no phone-home · Apache-2.0</text>
+</svg>

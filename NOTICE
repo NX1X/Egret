@@ -1,0 +1,16 @@
+Egret
+Copyright 2026 NX1X (https://nx1xlab.dev)
+Author: NX1X — https://nx1xlab.dev · contact: https://nx1xlab.dev/contact
+
+This product includes software authored by NX1X (https://nx1xlab.dev) and contributors.
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+Bundled/third-party components:
+- github.com/cilium/ebpf — Apache-2.0 (eBPF loader / bpf2go).
+- github.com/spf13/cobra — Apache-2.0; github.com/spf13/pflag — BSD-3-Clause.
+- github.com/miekg/dns — BSD-3-Clause.
+- go.yaml.in/yaml/v3 — MIT.
+- golang.org/x/sys, golang.org/x/* — BSD-3-Clause (The Go Authors).
+
+Full dependency inventory and license policy: docs/DEPENDENCIES.md.

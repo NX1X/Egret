@@ -1,0 +1,109 @@
+{
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  RENOVATE CONFIG — Egret (Go modules + GitHub Actions)
+  //  Renovate reads this from .github/renovate.json5 automatically.
+  //
+  //  SELF-CONTAINED: the dependency policy is inlined here rather than fetched
+  //  from a shared preset repo, so Renovate has no external preset dependency.
+  //
+  //  Posture: MANUAL MERGE — nothing automerges; every update lands as a PR.
+  //  14-day supply-chain cooldown, OSV + OpenSSF alerts, SHA-pinned
+  //  actions, dependency dashboard.
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+
+  // Public Renovate presets only — these always resolve.
+  //   config:best-practices  → pin Action SHAs + dev deps, npm release-age cooldown
+  //   security:openssf-scorecard → OpenSSF Scorecard badge on every PR
+  "extends": [
+    "config:best-practices",
+    "security:openssf-scorecard",
+    ":dependencyDashboard",
+    ":semanticCommits"
+  ],
+
+  "timezone": "America/New_York",
+  "schedule": ["before 6am on monday"],
+
+  // ── Supply-chain cooldown: default 14 days before adopting a new release
+  //    (stricter than a 7-day minimum). CVE fixes are exempted via vulnerabilityAlerts below.
+  "minimumReleaseAge": "14 days",
+  "internalChecksFilter": "strict",
+
+  "configMigration": true,
+
+  "labels": ["dependencies"],
+  "assignees": ["NX1X"],
+  "reviewers": ["NX1X"],
+
+  "dependencyDashboard": true,
+  "dependencyDashboardTitle": "Dependency Dashboard",
+  "dependencyDashboardLabels": ["dependencies"],
+  "dependencyDashboardAutoclose": true,
+
+  "prConcurrentLimit": 5,
+  "prHourlyLimit": 2,
+  "prCreation": "not-pending",
+  "rangeStrategy": "bump",
+  "separateMultipleMajor": true,
+
+  // ── Security fast-path: CVE fixes bypass the cooldown but still need a manual
+  //    merge (active CVE: exception by manual approval).
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "minimumReleaseAge": "0 days",
+    "labels": ["dependencies", "security"]
+  },
+  "osvVulnerabilityAlerts": true,
+
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 6am on monday"]
+  },
+
+  "packageRules": [
+    {
+      "description": "GitHub Actions: SHA-pinned, grouped minor/patch/digest into one PR",
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["minor", "patch", "digest"],
+      "groupName": "github-actions",
+      "labels": ["dependencies", "github-actions"]
+    },
+    {
+      "description": "GitHub Actions majors: dedicated label, reviewed individually",
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["major"],
+      "labels": ["dependencies", "github-actions", "major-update"]
+    },
+    {
+      "description": "Any major update: extra cooldown + clear label so it never slips by",
+      "matchUpdateTypes": ["major"],
+      "minimumReleaseAge": "21 days",
+      "labels": ["dependencies", "major-update"]
+    },
+    {
+      "description": "Go modules: group minor/patch into one review PR; majors stay separate",
+      "matchManagers": ["gomod"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "go modules",
+      "labels": ["dependencies", "go"]
+    },
+    {
+      "description": "Go toolchain / go directive bumps reviewed on their own",
+      "matchManagers": ["gomod"],
+      "matchDepTypes": ["golang"],
+      "labels": ["dependencies", "go", "toolchain"]
+    }
+  ],
+
+  // eBPF-generated bindings and build output are not dependency sources.
+  "ignorePaths": [
+    "**/vendor/**",
+    "**/bin/**",
+    "**/build/**",
+    "**/dist/**",
+    "**/*_bpfel.go",
+    "**/*_bpfeb.go"
+  ]
+}

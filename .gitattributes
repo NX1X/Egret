@@ -1,0 +1,16 @@
+# Normalise line endings: the repo stores LF. This keeps shell scripts runnable
+# on Linux runners and prevents gofmt/CI from flagging CRLF-tainted Go files,
+# regardless of contributor OS.
+* text=auto eol=lf
+
+*.go    text eol=lf
+*.c     text eol=lf
+*.h     text eol=lf
+*.sh    text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.md    text eol=lf
+Makefile text eol=lf
+
+# Generated eBPF objects are binary.
+*.o     binary

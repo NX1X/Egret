@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  # Cross-platform packages + the non-Linux build paths (run_other, the
+  # collector/enforcer stubs). Building for a non-Linux target excludes every
+  # //go:build linux file, so this needs no eBPF codegen or kernel.
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@3041bf56c941b39c61721a86cd11f3bb1338122a # v5.2.0
+        with:
+          go-version: "1.25.12"
+      - run: go mod download
+      - name: Format check
+        run: test -z "$(gofmt -l .)" || (gofmt -l . && exit 1)
+      - name: Cross-platform compile (excludes eBPF-tagged files)
+        run: |
+          GOOS=darwin  GOARCH=arm64 go build ./...
+          GOOS=windows GOARCH=amd64 go build ./...
+      - name: Vet pure packages
+        run: go vet ./internal/policy/... ./internal/report/... ./internal/audit/... ./internal/event/... ./internal/monitor/... ./internal/enforcer/... ./internal/sarif/... ./internal/ingest/...
+      - name: Test with coverage
+        run: |
+          go test -coverprofile=coverage.out \
+            ./internal/policy/... ./internal/report/... ./internal/audit/... \
+            ./internal/event/... ./internal/monitor/... ./internal/enforcer/... \
+            ./internal/sarif/... ./internal/ingest/...
+          go tool cover -func=coverage.out | tail -1
+
+  # Full Linux build + test using the COMMITTED bpf2go bindings (checked in and
+  # embedded via go:embed) — needs no clang/bpftool/BTF. The regenerate-from-source
+  # reproducibility check runs on the Linux dev VM, not on GitHub runners (their
+  # kernel ships no matching bpftool to dump the CO-RE vmlinux.h).
+  ebpf:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@3041bf56c941b39c61721a86cd11f3bb1338122a # v5.2.0
+        with:
+          go-version: "1.25.12"
+      - run: go mod download
+      - name: Build (from committed eBPF bindings)
+        run: make build
+      - name: Test (full tree, incl. cli/collector — needs generated bindings)
+        run: go test ./...
+      - name: Smoke test
+        run: ./bin/egret version
+      - name: Verify module checksums
+        run: go mod verify
+      - name: Vulnerability scan (govulncheck)
+        # Per docs/DEPENDENCIES.md: fail CI on known-vulnerable dependencies.
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@v1.6.0
+          "$(go env GOPATH)/bin/govulncheck" ./...

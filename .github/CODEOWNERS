@@ -1,0 +1,26 @@
+# CODEOWNERS — auto-assign reviewers and enforce review on sensitive paths.
+# Combined with "Require review from Code Owners" in branch protection, this
+# forces the right eyes on changes to the listed areas.
+
+# Everything has a default owner
+*                                   @NX1X
+
+# Security-critical: CI, supply chain, org policy
+/.github/                           @NX1X
+/.github/workflows/                 @NX1X
+/SECURITY.md                        @NX1X
+
+# Egress enforcer + network eBPF — requires a network-security review
+/internal/enforcer/                 @NX1X
+/internal/bpf/network.bpf.c         @NX1X
+/internal/bpf/                      @NX1X
+/internal/collector/                @NX1X
+
+# The published GitHub Action surface
+/action/                            @NX1X
+
+# Dependency + build policy
+/go.mod                             @NX1X
+/go.sum                             @NX1X
+/docs/DEPENDENCIES.md               @NX1X
+/Makefile                           @NX1X

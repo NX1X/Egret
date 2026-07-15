@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="180" viewBox="0 0 640 180" role="img" aria-label="Egret">
+  <title>Egret</title>
+  <defs>
+    <linearGradient id="lbg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#13293D"/>
+      <stop offset="1" stop-color="#0B1B2B"/>
+    </linearGradient>
+  </defs>
+
+  <!-- icon mark -->
+  <g transform="translate(20,26) scale(0.5)">
+    <rect x="0" y="0" width="256" height="256" rx="56" fill="url(#lbg)"/>
+    <line x1="40" y1="196" x2="216" y2="196" stroke="#2DD4BF" stroke-width="6" stroke-linecap="round"/>
+    <circle cx="216" cy="196" r="7" fill="#2DD4BF"/>
+    <g fill="none" stroke="#F5F7FA" stroke-width="13" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M120 188 C104 156 150 150 138 112 C132 92 150 78 168 80"/>
+      <path d="M120 188 C96 184 84 168 96 150 C108 134 140 138 150 118" stroke-width="15"/>
+    </g>
+    <circle cx="171" cy="79" r="12" fill="#F5F7FA"/>
+    <path d="M182 76 L214 66 L184 86 Z" fill="#F5B54B"/>
+    <path d="M166 70 C176 52 190 46 206 44" fill="none" stroke="#F5F7FA" stroke-width="6" stroke-linecap="round"/>
+    <g stroke="#F5F7FA" stroke-width="7" stroke-linecap="round">
+      <line x1="112" y1="186" x2="108" y2="212"/>
+      <line x1="126" y1="186" x2="130" y2="212"/>
+    </g>
+  </g>
+
+  <!-- wordmark -->
+  <text x="168" y="98" font-family="'Space Grotesk','Inter Tight',Inter,system-ui,sans-serif"
+        font-size="72" font-weight="700" letter-spacing="-1.5" fill="#F5F7FA">Egret</text>
+  <text x="170" y="132" font-family="Inter,system-ui,sans-serif"
+        font-size="21" font-weight="500" letter-spacing="0.5" fill="#2DD4BF">runtime egress security</text>
+</svg>

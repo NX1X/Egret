@@ -1,0 +1,108 @@
+name: "Egret"
+description: "Monitor and enforce runtime egress, process, and file behaviour of a CI job (eBPF, zero-infra), with a SARIF upload to Code Scanning."
+branding:
+  icon: "shield"
+  color: "green"
+
+inputs:
+  command:
+    description: "Command to run under Egret (monitored, and enforced in block mode). If empty, Egret is only installed so you can call `egret run` yourself."
+    required: false
+    default: ""
+  policy:
+    description: "Path to a policy.yaml. If omitted, safe defaults (audit mode) are used."
+    required: false
+    default: ""
+  mode:
+    description: "Override policy mode: audit | block."
+    required: false
+    default: "audit"
+  version:
+    description: "Egret release tag to download (e.g. v0.1.0). 'latest' resolves the newest release."
+    required: false
+    default: "latest"
+  sarif:
+    description: "Produce a SARIF report of policy violations from the run."
+    required: false
+    default: "true"
+  upload-sarif:
+    description: "Upload the SARIF to GitHub Code Scanning (requires `security-events: write` permission)."
+    required: false
+    default: "true"
+  fail-on-violations:
+    description: "Fail the job if Egret records any policy violation, even in audit mode."
+    required: false
+    default: "false"
+  output-dir:
+    description: "Directory for report.json / report.md / report.sarif (default: $RUNNER_TEMP/egret/report)."
+    required: false
+    default: ""
+  allow-build-from-source:
+    description: "If no verified release is available, build Egret from source (UNPINNED, unverified). Off by default."
+    required: false
+    default: "false"
+  allow-pull-request-target:
+    description: "Permit running under pull_request_target (Egret runs your command as ROOT — only enable if you do NOT check out the PR head)."
+    required: false
+    default: "false"
+  disable-sudo:
+    description: "Block mode only: revoke the build user's passwordless sudo for the run (defence-in-depth on top of no_new_privs). Refused in audit mode (the command runs as root there)."
+    required: false
+    default: "false"
+  ingest-url:
+    description: "Optional self-hosted Egret Nest dashboard ingest URL (e.g. https://nest.example.com/ingest). When set, the run's report is POSTed there. Leave empty to keep everything local (no phone-home)."
+    required: false
+    default: ""
+  ingest-token:
+    description: "Bearer token for the ingest endpoint. Pass a GitHub Actions secret (never a literal) — it is sent as a request header, never placed on a command line. Ignored unless ingest-url is set."
+    required: false
+    default: ""
+
+outputs:
+  report-dir:
+    description: "Directory containing report.json / report.md / report.sarif."
+    value: ${{ steps.run.outputs.report-dir }}
+  sarif-file:
+    description: "Path to the generated SARIF file (empty when sarif is disabled or no command ran)."
+    value: ${{ steps.run.outputs.sarif-file }}
+  violations:
+    description: "Number of policy violations Egret recorded."
+    value: ${{ steps.run.outputs.violations }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install Egret
+      shell: bash
+      env:
+        EGRET_VERSION: ${{ inputs.version }}
+        EGRET_ALLOW_BUILD_FROM_SOURCE: ${{ inputs.allow-build-from-source }}
+      run: ${{ github.action_path }}/entrypoint.sh install
+
+    # Inputs are passed via env (never interpolated into the run: script) so a
+    # crafted input can't inject shell — the classic Actions script-injection.
+    - name: Run Egret
+      id: run
+      if: ${{ inputs.command != '' }}
+      shell: bash
+      env:
+        EGRET_POLICY: ${{ inputs.policy }}
+        EGRET_MODE: ${{ inputs.mode }}
+        EGRET_COMMAND: ${{ inputs.command }}
+        EGRET_OUTPUT_DIR: ${{ inputs.output-dir }}
+        EGRET_SARIF: ${{ inputs.sarif }}
+        EGRET_FAIL_ON_VIOLATIONS: ${{ inputs.fail-on-violations }}
+        EGRET_ALLOW_PULL_REQUEST_TARGET: ${{ inputs.allow-pull-request-target }}
+        EGRET_DISABLE_SUDO: ${{ inputs.disable-sudo }}
+        EGRET_INGEST_URL: ${{ inputs.ingest-url }}
+        EGRET_INGEST_TOKEN: ${{ inputs.ingest-token }}
+      run: ${{ github.action_path }}/entrypoint.sh run
+
+    # always() so the SARIF still uploads when the wrapped build fails or a
+    # block-mode violation trips the run step — exactly when the signal matters.
+    - name: Upload SARIF to Code Scanning
+      if: ${{ always() && inputs.command != '' && inputs.sarif == 'true' && inputs.upload-sarif == 'true' && steps.run.outputs.sarif-file != '' }}
+      uses: github/codeql-action/upload-sarif@4f3212b61783c3c68e8309a0f18a699764811cda # v3.27.1
+      with:
+        sarif_file: ${{ steps.run.outputs.sarif-file }}
+        category: egret

@@ -1,0 +1,52 @@
+# Binaries (root-built artifact only — NOT the cmd/egret source dir)
+/egret
+*.exe
+*.dll
+*.so
+*.dylib
+/bin/
+/dist/
+
+# eBPF: the bpf2go output (*_bpfel.go/.o, *_bpfeb.go/.o) is COMMITTED so a plain
+# `git clone && go build` works without the clang/BTF toolchain (the .o is portable
+# CO-RE bytecode). Only the raw intermediate + the generated CO-RE header are ignored
+# (those need `make generate` with bpftool + kernel BTF, for maintainers only).
+*.bpf.o
+
+# Test & coverage
+*.test
+*.out
+coverage.out
+coverage.html
+
+# Go workspace
+go.work
+go.work.sum
+
+# Reports produced by egret runs
+/hardened-report/
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+*.swp
+
+# Local / machine-specific dev tooling & settings (not shared)
+.claude/
+CLAUDE.md
+ORDERS.md
+scripts/build_lessons_index.py
+scripts/check_opsec_sync.py
+scripts/scaffold_template_harness.py
+scripts/show_session_state.sh
+.vscode/settings.local.json
+**/settings.local.json
+
+# generated CO-RE header (from kernel BTF via bpftool)
+internal/bpf/vmlinux.h
+branding/png/
+
+# Internal-only docs (dev status, security-followups, decisions, lessons, opsec)
+# Curated public docs live in docs/ + root; these never ship in the OSS repo.
+docs-internal/
+.vscode/settings.json

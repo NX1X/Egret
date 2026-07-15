@@ -1,0 +1,138 @@
+# Release: build the Linux binary + SHA256SUMS on a version tag, and publish a
+# GitHub Release. The Egret Action's installer downloads `egret_linux_amd64` and
+# verifies it against `SHA256SUMS` (fail-closed), so BOTH assets, with these exact
+# names, must be published here.
+name: release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  # Manual re-run of an EXISTING tag's release (e.g. a prior run failed partway).
+  # Supply the already-pushed tag; the job checks it out and (re)publishes. It does
+  # NOT create tags - the tag must already exist (the release step --verify-tag's it).
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing version tag to (re)release, e.g. v0.1.0"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+# Serialize per-tag so a double/re-push (or a manual re-run) can't race two publishes.
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # `release` is a protected GitHub Environment: add required reviewers (+ an
+    # optional wait timer) in repo Settings → Environments so a tag push can't
+    # publish the trust artifact unattended. Referencing a not-yet-created
+    # environment is harmless (created unprotected until you add rules).
+    environment: release
+    permissions:
+      contents: write      # create the GitHub Release + upload assets
+      id-token: write      # OIDC for keyless SLSA provenance
+      attestations: write  # store the build provenance attestation
+    # Resolve the tag once: on a tag push it's the pushed tag; on a manual dispatch
+    # it's the typed input (github.ref_name would be the branch, not a tag).
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+    steps:
+      # Don't persist the ambient GITHUB_TOKEN into .git/config: nothing here does
+      # git-level writes (the release step uses its own GH_TOKEN), and the build
+      # runs third-party toolchain/module code that must not see push credentials.
+      - name: Validate release tag format
+        run: |
+          # Reject anything that isn't vMAJOR.MINOR.PATCH before we check out that
+          # ref or spend ~20 min building — guards a mistyped manual-dispatch input
+          # (e.g. a branch name) from reaching checkout/build/publish.
+          [[ "${TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+            echo "::error::TAG '${TAG}' is not a vMAJOR.MINOR.PATCH release tag."; exit 1; }
+
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ env.TAG }}
+          persist-credentials: false
+
+      - uses: actions/setup-go@3041bf56c941b39c61721a86cd11f3bb1338122a # v5.2.0
+        with:
+          # Pin the patched toolchain (GO-2026-5856, crypto/tls ECH leak, fixed in
+          # 1.25.12) so the release trust artifact is built reproducibly + vuln-free.
+          go-version: "1.25.12"
+          # No build cache on the release/trust path: a cache entry populated by a
+          # lower-privileged workflow (PR) must not be restorable here (cache poisoning).
+          cache: false
+
+      - name: Build static binary (from committed eBPF bindings)
+        env:
+          VERSION: ${{ env.TAG }}
+        # bpf2go output is checked in + embedded via go:embed, so the release binary
+        # builds with no clang/bpftool/BTF on the runner (the runner kernel has no
+        # matching bpftool anyway).
+        run: make build-static VERSION="${VERSION}"
+
+      - name: Package assets (egret_linux_amd64 + SHA256SUMS)
+        run: |
+          cp bin/egret egret_linux_amd64
+          sha256sum egret_linux_amd64 > SHA256SUMS
+          echo "--- SHA256SUMS ---"; cat SHA256SUMS
+          # Sanity: the Action installer greps this exact asset name.
+          grep -qE "  ?egret_linux_amd64$" SHA256SUMS
+
+      # SLSA build provenance (keyless, OIDC) — lets consumers verify the binary was
+      # built by this workflow:  gh attestation verify egret_linux_amd64 --repo NX1X/Egret
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@96278af6caaf10aea03fd8d33a09a777ca52d62f # v3.2.0
+        with:
+          subject-path: "egret_linux_amd64, SHA256SUMS"
+
+      # Keyless cosign signature of SHA256SUMS (Sigstore: a short-lived Fulcio cert
+      # bound to this workflow's OIDC identity + a Rekor transparency-log entry — no
+      # private key to store or rotate). SHA256SUMS already covers the binary, so
+      # signing it transitively signs the binary — PROVIDED the consumer also checks
+      # the binary against it. Full verify of a download:
+      #   cosign verify-blob --certificate SHA256SUMS.pem --signature SHA256SUMS.sig \
+      #     --certificate-identity-regexp '^https://github.com/NX1X/Egret/\.github/workflows/release\.yml@.*' \
+      #     --certificate-oidc-issuer https://token.actions.githubusercontent.com SHA256SUMS
+      #   sha256sum -c SHA256SUMS         # <-- ties the signed digest to the binary
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      - name: Sign SHA256SUMS (keyless)
+        run: |
+          cosign sign-blob --yes \
+            --output-signature SHA256SUMS.sig \
+            --output-certificate SHA256SUMS.pem \
+            SHA256SUMS
+
+      - name: Create or update GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Idempotent so a manual re-run of an existing tag republishes cleanly:
+          # if the Release already exists, re-upload assets (--clobber); else create it.
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            echo "Release ${TAG} already exists — re-uploading assets (--clobber)."
+            gh release upload "${TAG}" \
+              egret_linux_amd64 SHA256SUMS SHA256SUMS.sig SHA256SUMS.pem --clobber
+          else
+            gh release create "${TAG}" \
+              egret_linux_amd64 SHA256SUMS SHA256SUMS.sig SHA256SUMS.pem \
+              --title "${TAG}" \
+              --generate-notes \
+              --verify-tag
+          fi
+
+  # Two independent verification paths ship with every release:
+  #   1. SLSA build provenance (actions/attest-build-provenance):
+  #        gh attestation verify egret_linux_amd64 --repo NX1X/Egret
+  #   2. Keyless cosign signature of SHA256SUMS (SHA256SUMS.sig + SHA256SUMS.pem):
+  #        cosign verify-blob --certificate SHA256SUMS.pem --signature SHA256SUMS.sig \
+  #          --certificate-identity-regexp '^https://github.com/NX1X/Egret/\.github/workflows/release\.yml@.*' \
+  #          --certificate-oidc-issuer https://token.actions.githubusercontent.com SHA256SUMS
+  #        sha256sum -c SHA256SUMS      # then confirm the binary matches the signed digest

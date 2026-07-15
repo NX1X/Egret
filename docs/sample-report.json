@@ -1,0 +1,24 @@
+{
+  "started_at": "2026-06-30T12:00:00Z",
+  "finished_at": "2026-06-30T12:00:42.318Z",
+  "command": ["./build.sh", "--release"],
+  "mode": "block",
+  "exit_code": 0,
+  "connections": [
+    {"time": "2026-06-30T12:00:01Z", "pid": 2201, "comm": "git", "daddr": "140.82.121.4", "dport": 443, "proto": "tcp", "domain": "github.com"},
+    {"time": "2026-06-30T12:00:03Z", "pid": 2230, "comm": "node", "daddr": "104.16.30.34", "dport": 443, "proto": "tcp", "domain": "registry.npmjs.org"},
+    {"time": "2026-06-30T12:00:09Z", "pid": 2244, "comm": "node", "daddr": "203.0.113.7", "dport": 443, "proto": "tcp", "domain": "telemetry.evil.example"},
+    {"time": "2026-06-30T12:00:11Z", "pid": 2310, "comm": "curl", "daddr": "1.1.1.1", "dport": 443, "proto": "tcp"}
+  ],
+  "processes": [
+    {"time": "2026-06-30T12:00:00Z", "pid": 2200, "ppid": 1, "comm": "build.sh", "filename": "/usr/bin/bash"},
+    {"time": "2026-06-30T12:00:01Z", "pid": 2201, "ppid": 2200, "comm": "git", "filename": "/usr/bin/git"}
+  ],
+  "file_writes": [
+    {"time": "2026-06-30T12:00:20Z", "pid": 2400, "comm": "postinstall", "path": "/home/runner/.ssh/known_hosts", "op": "open-write"}
+  ],
+  "violations": [
+    {"kind": "connection", "reason": "domain not in allowlist", "detail": "telemetry.evil.example (203.0.113.7:443/tcp) by node[2244]", "blocked": true},
+    {"kind": "connection", "reason": "raw-ip egress", "detail": "1.1.1.1:443/tcp by curl[2310] with no prior DNS lookup", "blocked": true}
+  ]
+}

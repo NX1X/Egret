@@ -1,0 +1,90 @@
+# Enforcer F-C re-gate: run block mode inside a cgroup-NAMESPACED container to
+# exercise the self-probe's fail-open detection - the topology bare-host CI can't
+# reach. A GitHub `container:` job runs steps inside a container (its own cgroup ns),
+# which is exactly the F-C condition. This is the gate for advertising block mode on
+# GitHub-hosted `container:` / self-hosted-in-k8s runners.
+#
+# It runs on demand and on enforcer-path changes. It is AUDIT/informative: it
+# classifies the outcome (self-probe abort = fail-closed detection = good; runs +
+# confined = good; runs + raw-IP reached = a self-probe hole). Flip `continue-on-error`
+# off once the expected outcome is confirmed, to make it a hard gate.
+name: enforcer-regate
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "internal/enforcer/**"
+      - "internal/cli/**"
+      - "internal/bpf/**"
+      - "scripts/validate-block-mode*.sh"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: enforcer-regate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  regate-namespaced:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Steps run INSIDE this container (own cgroup namespace = the F-C topology).
+    # --privileged grants CAP_BPF + nftables; the cgroup ns is still the container's.
+    container:
+      image: golang:1.25-bookworm
+      options: --privileged
+    continue-on-error: true # informative until the expected outcome is confirmed
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Install eBPF + nft toolchain
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends clang llvm libbpf-dev nftables curl ca-certificates
+          useradd -u 1000 -m builduser || true
+
+      - name: Check kernel BTF is reachable
+        run: |
+          if [ ! -f /sys/kernel/btf/vmlinux ]; then
+            echo "::warning::no /sys/kernel/btf/vmlinux in the job container; CO-RE load may fail. Skipping."
+            exit 0
+          fi
+
+      - name: Mount tracefs (eBPF tracepoints need it inside the container)
+        run: |
+          mount -t tracefs tracefs /sys/kernel/tracing 2>/dev/null \
+            || mount -t debugfs debugfs /sys/kernel/debug 2>/dev/null \
+            || echo "::warning::could not mount tracefs/debugfs; collector may fail"
+
+      - name: Build egret (committed eBPF bindings; no codegen needed)
+        run: go build -buildvcs=false -o bin/egret ./cmd/egret
+
+      - name: F-C re-gate — block mode in a namespaced container
+        env:
+          EGRET_BUILD_UID: "1000"
+          EGRET_BUILD_GID: "1000"
+        run: |
+          echo "cgroup ns: $(readlink /proc/self/ns/cgroup)"
+          cat > /tmp/pol.yaml <<'YAML'
+          version: 1
+          mode: block
+          egress: { allowed-endpoints: [example.com], block-raw-ip: true }
+          report: { format: [json], output-dir: /tmp/rep }
+          YAML
+          out=$(./bin/egret run --mode block --config /tmp/pol.yaml -- \
+                  bash -c "curl -sS --max-time 6 -o /dev/null https://8.8.8.8 && echo RAW-REACHED || echo raw-blocked" 2>&1) || true
+          echo "----- egret output -----"; echo "$out"; echo "------------------------"
+          if echo "$out" | grep -q "self-probe FAILED"; then
+            echo "::notice::F-C fail-open DETECTED and refused (fail-closed). Self-probe works on a namespaced runner."
+          elif echo "$out" | grep -q "RAW-REACHED"; then
+            echo "::error::RUNS + raw IP REACHED — fail-open NOT detected. Self-probe hole to fix."
+            exit 1
+          elif echo "$out" | grep -q "raw-blocked"; then
+            echo "::notice::cgroup match works even namespaced here — build confined."
+          else
+            echo "::warning::inconclusive (egret aborted for another reason)."
+          fi

@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-label="Egret icon">
+  <title>Egret</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#13293D"/>
+      <stop offset="1" stop-color="#0B1B2B"/>
+    </linearGradient>
+    <linearGradient id="egress" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#2DD4BF" stop-opacity="0"/>
+      <stop offset="0.35" stop-color="#2DD4BF"/>
+      <stop offset="1" stop-color="#2DD4BF"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="0" y="0" width="256" height="256" rx="56" fill="url(#bg)"/>
+
+  <!-- egress line: the outbound flight/traffic the egret watches -->
+  <line x1="40" y1="196" x2="216" y2="196" stroke="url(#egress)" stroke-width="6" stroke-linecap="round"/>
+  <circle cx="216" cy="196" r="7" fill="#2DD4BF"/>
+
+  <!-- egret: S-curved neck, head, beak, plume, body, legs -->
+  <g fill="none" stroke="#F5F7FA" stroke-width="13" stroke-linecap="round" stroke-linejoin="round">
+    <!-- neck (S-curve) up to the head -->
+    <path d="M120 188 C104 156 150 150 138 112 C132 92 150 78 168 80"/>
+    <!-- body -->
+    <path d="M120 188 C96 184 84 168 96 150 C108 134 140 138 150 118" stroke-width="15"/>
+  </g>
+  <!-- head + beak (solid) -->
+  <circle cx="171" cy="79" r="12" fill="#F5F7FA"/>
+  <path d="M182 76 L214 66 L184 86 Z" fill="#F5B54B"/>
+  <!-- crest plume -->
+  <path d="M166 70 C176 52 190 46 206 44" fill="none" stroke="#F5F7FA" stroke-width="6" stroke-linecap="round"/>
+  <!-- legs -->
+  <g stroke="#F5F7FA" stroke-width="7" stroke-linecap="round">
+    <line x1="112" y1="186" x2="108" y2="212"/>
+    <line x1="126" y1="186" x2="130" y2="212"/>
+  </g>
+</svg>

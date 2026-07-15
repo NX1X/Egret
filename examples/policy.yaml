@@ -1,0 +1,42 @@
+version: 1
+
+# What to do when something is not allowed:
+#   audit -> log only, never block (default, safe)
+#   block -> enforce default-deny egress
+mode: audit
+
+egress:
+  # Domain allowlist. A leading "*." wildcard matches subdomains only.
+  allowed-endpoints:
+    - github.com
+    - api.github.com
+    - codeload.github.com
+    - "*.actions.githubusercontent.com"
+    - objects.githubusercontent.com
+    - registry.npmjs.org
+    - proxy.golang.org
+  # Raw IP / CIDR allowlist: destinations reachable WITHOUT a domain (a private
+  # registry by IP, an internal host). v4/v6, single IP or CIDR. These are allowed
+  # even with block-raw-ip on. Leave empty if you only allow by domain.
+  # NOTE: an allowed IP is allowed on ALL ports/protocols; if it's a shared/CDN
+  # address, prefer allowed-endpoints (domain). A default route (/0) is rejected.
+  allowed-ips: []   # e.g. ["10.0.0.0/8", "192.0.2.10", "2001:db8::/32"]
+  # Block connections made directly to IPs with no prior DNS lookup
+  # (an IP in allowed-ips above is exempt).
+  block-raw-ip: true
+
+filesystem:
+  # Writes to these paths are flagged.
+  protected-paths:
+    - .git/
+    - ~/.ssh/
+    - /etc/
+
+process:
+  # Optional: flag execution of these (bare name or glob path).
+  disallowed: []   # e.g. ["nc", "ncat", "/tmp/*"]
+
+report:
+  format: [markdown, json]
+  output-dir: ./hardened-report
+  github-job-summary: true   # append to $GITHUB_STEP_SUMMARY when present

@@ -1,0 +1,53 @@
+name: Bug report
+description: Something in Egret behaves incorrectly (not a security vulnerability)
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Security bug?** Do not file it here — report privately (see SECURITY.md).
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you observed vs. what you expected.
+      placeholder: egret run ... allowed an egress connection that the policy denies.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Command line, the relevant policy.yaml snippet, and the build/command being wrapped.
+      render: shell
+    validations:
+      required: true
+  - type: input
+    id: mode
+    attributes:
+      label: Mode
+      description: audit or block
+      placeholder: block
+    validations:
+      required: true
+  - type: input
+    id: kernel
+    attributes:
+      label: Kernel / distro
+      description: Output of `uname -r` and the distro (eBPF behavior is kernel-sensitive).
+      placeholder: 6.8.0-generic, Ubuntu 24.04
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Egret version
+      description: Output of `egret version` (or the commit / Action tag).
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Report / logs
+      description: Relevant excerpt from the report or stderr. Redact anything sensitive.
+      render: shell

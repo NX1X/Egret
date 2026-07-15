@@ -1,0 +1,34 @@
+name: Feature request
+description: Suggest a capability or improvement for Egret
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / use case
+      description: What are you trying to do that Egret doesn't support today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What would you like Egret to do? CLI flag, policy field, Action input, etc.
+    validations:
+      required: true
+  - type: dropdown
+    id: tier
+    attributes:
+      label: Which tier does this touch?
+      description: See docs/ROADMAP.md — Egret grows in strictly additive tiers.
+      options:
+        - CLI + Action (tier 1)
+        - Server-less GitHub App (tier 2)
+        - Optional self-hosted server (tier 3)
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
