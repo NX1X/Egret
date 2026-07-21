@@ -1,6 +1,6 @@
 module github.com/NX1X/Egret
 
-go 1.25.12
+go 1.26.5
 
 require (
 	github.com/cilium/ebpf v0.16.0

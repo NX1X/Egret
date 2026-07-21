@@ -55,16 +55,16 @@ jobs:
           [[ "${TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
             echo "::error::TAG '${TAG}' is not a vMAJOR.MINOR.PATCH release tag."; exit 1; }
 
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ env.TAG }}
           persist-credentials: false
 
-      - uses: actions/setup-go@3041bf56c941b39c61721a86cd11f3bb1338122a # v5.2.0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
-          # Pin the patched toolchain (GO-2026-5856, crypto/tls ECH leak, fixed in
-          # 1.25.12) so the release trust artifact is built reproducibly + vuln-free.
-          go-version: "1.25.12"
+          # Pin the patched toolchain (crypto/tls GO-2026-5856 + related stdlib
+          # advisories, all fixed in go1.26.5) so the trust artifact is built vuln-free.
+          go-version: "1.26.5"
           # No build cache on the release/trust path: a cache entry populated by a
           # lower-privileged workflow (PR) must not be restorable here (cache poisoning).
           cache: false
@@ -88,7 +88,7 @@ jobs:
       # SLSA build provenance (keyless, OIDC) — lets consumers verify the binary was
       # built by this workflow:  gh attestation verify egret_linux_amd64 --repo NX1X/Egret
       - name: Attest build provenance
-        uses: actions/attest-build-provenance@96278af6caaf10aea03fd8d33a09a777ca52d62f # v3.2.0
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
         with:
           subject-path: "egret_linux_amd64, SHA256SUMS"
 
