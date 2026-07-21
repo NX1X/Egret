@@ -31,14 +31,7 @@ go.work.sum
 Thumbs.db
 *.swp
 
-# Local / machine-specific dev tooling & settings (not shared)
-.claude/
-CLAUDE.md
-ORDERS.md
-scripts/build_lessons_index.py
-scripts/check_opsec_sync.py
-scripts/scaffold_template_harness.py
-scripts/show_session_state.sh
+# Local / machine-specific editor settings (not shared)
 .vscode/settings.local.json
 **/settings.local.json
 
