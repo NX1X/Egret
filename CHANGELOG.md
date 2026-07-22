@@ -3,6 +3,16 @@
 Notable changes to Egret, following [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2] - Brand refresh
+
+### Changed
+
+- **New visual identity.** The mark is now an egret in flight; the icon, app-icon,
+  logo (a self-contained dark-card lockup), and social preview were all redrawn.
+- **Marketplace branding icon** is now `feather` (the Actions Marketplace supports
+  only a named Feather icon + color, so the egret artwork cannot be the listing tile).
+- **README** now leads with the logo lockup.
+
 ## [0.1.1] - Marketplace listing + App-token publishing
 
 ### Added
@@ -62,5 +72,6 @@ generation — shipped as a CLI and a GitHub Action, with no server and no phone
 - **Hardened by default:** no phone-home; egress/event records are metadata only
   (never payloads); block mode is fail-closed on teardown.
 
+[0.1.2]: https://github.com/NX1X/Egret/releases/tag/v0.1.2
 [0.1.1]: https://github.com/NX1X/Egret/releases/tag/v0.1.1
 [0.1.0]: https://github.com/NX1X/Egret/releases/tag/v0.1.0

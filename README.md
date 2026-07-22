@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="branding/logo.svg" alt="Egret - runtime egress security" width="440">
+</p>
+
 # 🪶 Egret
 
 > An open-source runtime security agent for CI/CD and generic Linux hosts.
