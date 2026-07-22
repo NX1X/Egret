@@ -24,7 +24,7 @@
   ],
 
   "timezone": "America/New_York",
-  "schedule": ["before 6am on monday"],
+  "schedule": ["before 6am"],
 
   // ── Supply-chain cooldown: default 14 days before adopting a new release
   //    (stricter than a 7-day minimum). CVE fixes are exempted via vulnerabilityAlerts below.
