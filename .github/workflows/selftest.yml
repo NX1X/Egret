@@ -50,3 +50,38 @@ jobs:
           test -f "${REPORT_DIR}/report.json" || { echo "::error::report.json missing"; exit 1; }
           [[ "${VIOLATIONS}" =~ ^[0-9]+$ ]] || { echo "::error::violations output not numeric"; exit 1; }
           echo "self-test OK: Egret installed, ran under eBPF, and produced a report."
+
+  # App-token publish path: mint an Egret Security App installation token in-workflow
+  # (server-less) and let the action publish a branded check + dashboard issue as
+  # egret-security-app[bot]. Manual (workflow_dispatch) so it doesn't post on every push.
+  app-token:
+    name: App-token publish (egret-security-app[bot])
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Mint Egret App installation token
+        id: app-token
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2.2.2
+        with:
+          app-id: ${{ secrets.EGRET_APP_ID }}
+          private-key: ${{ secrets.EGRET_APP_PRIVATE_KEY }}
+
+      - name: Run Egret + publish results via the App token
+        uses: ./
+        with:
+          version: latest
+          mode: audit
+          upload-sarif: "false"        # v0.1.0 binary SARIF bug; re-enable after v0.1.1
+          github-token: ${{ steps.app-token.outputs.token }}
+          check-run: true
+          dashboard-issue: true
+          command: |
+            echo "app-token test build"
+            curl -fsS https://example.com -o /dev/null
