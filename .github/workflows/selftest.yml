@@ -30,8 +30,12 @@ jobs:
         id: egret
         uses: ./
         with:
-          version: v0.1.0          # download + verify the released binary
+          version: latest          # download + verify the newest released binary
           mode: audit
+          # Skip SARIF upload until v0.1.1 ships the SARIF-location fix: v0.1.0's
+          # binary emits a result with no location and Code Scanning rejects it.
+          # Re-enable (remove this line) once latest == v0.1.1.
+          upload-sarif: "false"
           command: |
             echo "guarded build step"
             curl -fsS https://example.com -o /dev/null

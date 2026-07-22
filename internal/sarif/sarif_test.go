@@ -66,8 +66,11 @@ func TestFromSessionStructure(t *testing.T) {
 
 func TestFromSessionNoPolicyPath(t *testing.T) {
 	log := FromSession(sampleSession(), "", "")
-	if l := log.Runs[0].Results[0].Locations; l != nil {
-		t.Errorf("expected no location when policyPath empty, got %+v", l)
+	// Every result must carry a location (Code Scanning rejects an empty locations
+	// array); with no policy path it falls back to the suggested default policy file.
+	l := log.Runs[0].Results[0].Locations
+	if len(l) != 1 || l[0].PhysicalLocation.ArtifactLocation.URI != defaultPolicyURI {
+		t.Errorf("want fallback location %q, got %+v", defaultPolicyURI, l)
 	}
 	// Version omitted when empty.
 	b, _ := json.Marshal(log.Runs[0].Tool.Driver)

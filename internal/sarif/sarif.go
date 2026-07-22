@@ -2,9 +2,10 @@
 // format GitHub Code Scanning ingests. Violations become SARIF results so they
 // surface as native security alerts on the Security tab and inline on PRs.
 //
-// Runtime violations are not tied to a source line, so — when a policy path is
-// known — results are located on the policy file; otherwise they are reported
-// without a physical location (attributed to the repository).
+// Runtime violations are not tied to a source line, so results are located on the
+// policy file when its path is known, else on a suggested default policy path.
+// Every result ALWAYS carries a location: GitHub Code Scanning rejects a result
+// with an empty locations array ("expected at least one location").
 //
 // Uses only the standard library (encoding/json via struct tags), per the
 // project dependency policy.
@@ -21,6 +22,10 @@ const (
 	schemaURI   = "https://json.schemastore.org/sarif-2.1.0.json"
 	toolName    = "Egret"
 	toolInfoURI = "https://github.com/NX1X/Egret"
+	// Runtime findings have no source line; when no policy file path is known we
+	// still MUST emit a location (Code Scanning rejects a result without one), so
+	// we attribute to the conventional policy file a user would create to fix it.
+	defaultPolicyURI = ".github/egret-policy.yaml"
 )
 
 // Log is the root SARIF document.
@@ -153,11 +158,12 @@ func message(v event.Violation) string {
 }
 
 func locations(policyPath string) []Location {
-	if policyPath == "" {
-		return nil
+	uri := policyPath
+	if uri == "" {
+		uri = defaultPolicyURI
 	}
 	return []Location{{PhysicalLocation: Physical{
-		ArtifactLocation: Artifact{URI: policyPath},
+		ArtifactLocation: Artifact{URI: uri},
 		Region:           &Region{StartLine: 1},
 	}}}
 }
