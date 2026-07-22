@@ -3,6 +3,32 @@
 Notable changes to Egret, following [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] - Marketplace listing + App-token publishing
+
+### Added
+
+- **GitHub Marketplace listing.** The Action now lives at the repository root and is
+  published as "Egret Security" on the Actions Marketplace. Reference it as
+  `NX1X/Egret@v0` (floating major) or a pinned `@v0.1.1`.
+- **App-token publish features.** New action inputs `github-token`, `check-run`,
+  `pr-comment`, and `dashboard-issue`: pass a GitHub App installation token to publish
+  a branded pass/fail check, a sticky PR comment, and the Egret Security Dashboard
+  issue as `egret-security-app[bot]` (each opt-in; falls back to `GITHUB_TOKEN`).
+
+### Fixed
+
+- **Action install checksum verification** now hash-compares the downloaded binary
+  directly, so `install` no longer fails closed on a valid release (the binary is
+  saved under a different on-disk name than the SHA256SUMS entry).
+- **SARIF results always carry a location** (fall back to a suggested policy path),
+  which GitHub Code Scanning requires - SARIF uploads are no longer rejected.
+
+### Changed
+
+- Go toolchain 1.26.5 (clears the crypto/tls, net/textproto, and x509 stdlib
+  advisories); codeql-action v4, checkout v7, setup-go v6, refreshed base-image digests.
+- Release notes are now sourced from this CHANGELOG.
+
 ## [0.1.0] — first release
 
 Egret is a runtime security agent for CI/CD and Linux hosts:
@@ -36,4 +62,5 @@ generation — shipped as a CLI and a GitHub Action, with no server and no phone
 - **Hardened by default:** no phone-home; egress/event records are metadata only
   (never payloads); block mode is fail-closed on teardown.
 
+[0.1.1]: https://github.com/NX1X/Egret/releases/tag/v0.1.1
 [0.1.0]: https://github.com/NX1X/Egret/releases/tag/v0.1.0
