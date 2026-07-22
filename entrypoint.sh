@@ -35,8 +35,14 @@ verify_checksum() {
     echo "::error::No SHA256SUMS published for ${tag}; refusing to run an unverified binary as root."
     return 1
   fi
-  if ! ( cd "${INSTALL_DIR}" && grep -E "  ?${ASSET}\$" "${sums}" | sha256sum -c - ); then
-    echo "::error::Checksum verification failed for ${ASSET} (${tag})."
+  # Hash-compare directly: the asset is saved as ${BIN} (…/egret), not "${ASSET}",
+  # so `sha256sum -c` on the SHA256SUMS line (which names the file "${ASSET}") would
+  # look for the wrong on-disk name and fail. Compare the digests instead.
+  local want got
+  want="$(grep -E "  ?${ASSET}\$" "${sums}" | awk '{print $1}')"
+  got="$(sha256sum "${BIN}" | awk '{print $1}')"
+  if [[ -z "${want}" || "${want}" != "${got}" ]]; then
+    echo "::error::Checksum verification failed for ${ASSET} (${tag}): expected '${want:-<not listed>}', got '${got}'."
     return 1
   fi
   echo "Verified ${ASSET} against SHA256SUMS."
