@@ -30,13 +30,22 @@ jobs:
           GOOS=windows GOARCH=amd64 go build ./...
       - name: Vet pure packages
         run: go vet ./internal/policy/... ./internal/report/... ./internal/audit/... ./internal/event/... ./internal/monitor/... ./internal/enforcer/... ./internal/sarif/... ./internal/ingest/...
-      - name: Test with coverage
-        run: |
-          go test -coverprofile=coverage.out \
-            ./internal/policy/... ./internal/report/... ./internal/audit/... \
-            ./internal/event/... ./internal/monitor/... ./internal/enforcer/... \
-            ./internal/sarif/... ./internal/ingest/...
-          go tool cover -func=coverage.out | tail -1
+      # Dogfood: run our own test suite under the Egret Action (audit - monitors
+      # the egress/exec/file behaviour of the toolchain + dependency code during the
+      # tests, and never blocks CI). These are the pure packages (no eBPF collector),
+      # so Egret's own eBPF load is the only one in play - no nesting.
+      - name: Test with coverage (guarded by Egret, audit)
+        uses: ./
+        with:
+          version: latest
+          mode: audit
+          upload-sarif: "false"
+          command: |
+            go test -coverprofile=coverage.out \
+              ./internal/policy/... ./internal/report/... ./internal/audit/... \
+              ./internal/event/... ./internal/monitor/... ./internal/enforcer/... \
+              ./internal/sarif/... ./internal/ingest/...
+            go tool cover -func=coverage.out | tail -1
 
   # Full Linux build + test using the COMMITTED bpf2go bindings (checked in and
   # embedded via go:embed) - needs no clang/bpftool/BTF. The regenerate-from-source
