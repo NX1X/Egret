@@ -1,0 +1,48 @@
+# Action self-test (dogfood): run the Egret Action from THIS repo (`uses: ./`)
+# against a sample build step, so every push proves the published action works
+# end-to-end on a stock GitHub-hosted runner: download + checksum-verify the
+# released binary, load eBPF, monitor a command, emit report + SARIF.
+name: Action self-test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  monitor:
+    name: Egret guards its own build (audit)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      security-events: write   # upload the SARIF to Code Scanning
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Run Egret over a sample command
+        id: egret
+        uses: ./
+        with:
+          version: v0.1.0          # download + verify the released binary
+          mode: audit
+          command: |
+            echo "guarded build step"
+            curl -fsS https://example.com -o /dev/null
+
+      - name: Assert the action produced a report + outputs
+        env:
+          REPORT_DIR: ${{ steps.egret.outputs.report-dir }}
+          VIOLATIONS: ${{ steps.egret.outputs.violations }}
+        run: |
+          echo "report-dir=${REPORT_DIR}  violations=${VIOLATIONS}"
+          test -n "${REPORT_DIR}" || { echo "::error::no report-dir output"; exit 1; }
+          test -f "${REPORT_DIR}/report.json" || { echo "::error::report.json missing"; exit 1; }
+          [[ "${VIOLATIONS}" =~ ^[0-9]+$ ]] || { echo "::error::violations output not numeric"; exit 1; }
+          echo "self-test OK: Egret installed, ran under eBPF, and produced a report."
