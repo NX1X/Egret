@@ -1,7 +1,10 @@
-name: "Egret"
+name: "Egret Runtime Guard"
 description: "Monitor and enforce runtime egress, process, and file behaviour of a CI job (eBPF, zero-infra), with a SARIF upload to Code Scanning."
 branding:
-  icon: "shield"
+  # GitHub Actions Marketplace allows only a Feather icon + a fixed color enum
+  # (no custom image / hex). "share-2" reads as the outbound network egress that
+  # the agent watches; green keeps the security/pass signal.
+  icon: "share-2"
   color: "green"
 
 inputs:
@@ -102,7 +105,7 @@ runs:
     # block-mode violation trips the run step — exactly when the signal matters.
     - name: Upload SARIF to Code Scanning
       if: ${{ always() && inputs.command != '' && inputs.sarif == 'true' && inputs.upload-sarif == 'true' && steps.run.outputs.sarif-file != '' }}
-      uses: github/codeql-action/upload-sarif@4f3212b61783c3c68e8309a0f18a699764811cda # v3.27.1
+      uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2
       with:
         sarif_file: ${{ steps.run.outputs.sarif-file }}
         category: egret

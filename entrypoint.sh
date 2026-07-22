@@ -73,8 +73,8 @@ cmd_install() {
     exit 1
   fi
   echo "Building egret from source (allow-build-from-source=true; unverified/unpinned)"
-  make -C "${GITHUB_ACTION_PATH}/.." generate build
-  cp "${GITHUB_ACTION_PATH}/../bin/egret" "${BIN}"
+  make -C "${GITHUB_ACTION_PATH}" generate build
+  cp "${GITHUB_ACTION_PATH}/bin/egret" "${BIN}"
   echo "${INSTALL_DIR}" >> "${GITHUB_PATH}"
   echo "::endgroup::"
 }

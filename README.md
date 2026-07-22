@@ -7,7 +7,13 @@
 The name plays on **egress** (its core job) and the egret bird. CLI:
 `egret run -- ./build.sh`.
 
-[![GitHub — NX1X/Egret](https://img.shields.io/badge/GitHub-NX1X%2FEgret-181717?logo=github&logoColor=white)](https://github.com/NX1X/Egret)
+[![CI](https://github.com/NX1X/Egret/actions/workflows/ci.yml/badge.svg)](https://github.com/NX1X/Egret/actions/workflows/ci.yml)
+[![Security](https://github.com/NX1X/Egret/actions/workflows/security.yml/badge.svg)](https://github.com/NX1X/Egret/actions/workflows/security.yml)
+[![Release](https://img.shields.io/github/v/release/NX1X/Egret?logo=github&logoColor=white&sort=semver)](https://github.com/NX1X/Egret/releases/latest)
+[![Go Report Card](https://goreportcard.com/badge/github.com/NX1X/Egret)](https://goreportcard.com/report/github.com/NX1X/Egret)
+[![Go](https://img.shields.io/github/go-mod/go-version/NX1X/Egret?logo=go&logoColor=white)](go.mod)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![GitHub - NX1X/Egret](https://img.shields.io/badge/GitHub-NX1X%2FEgret-181717?logo=github&logoColor=white)](https://github.com/NX1X/Egret)
 
 - **Status:** pre-MVP / active development (see [docs/ROADMAP.md](docs/ROADMAP.md))
 - **Repository:** [github.com/NX1X/Egret](https://github.com/NX1X/Egret)
@@ -77,7 +83,7 @@ jobs:
       security-events: write     # required to upload SARIF to Code Scanning
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: NX1X/Egret/action@v1        # published with the first release; pin to a SHA meanwhile
+      - uses: NX1X/Egret@v0        # floating major; or pin @v0.1.0 / a commit SHA for immutability
         with:
           policy: .github/egret-policy.yaml
           mode: audit                 # or: block

@@ -23,7 +23,7 @@ in the same change. Only `social-preview.svg` is allowed to differ.
 
 | File | Use | Shared? |
 |---|---|---|
-| `logo.svg` | Horizontal wordmark (README header, docs, dashboard nav) | ✅ identical |
+| `logo.svg` | Horizontal lockup on a self-contained dark card (README header, docs, dashboard nav) | ✅ identical |
 | `icon.svg` | Square app icon / avatar / **favicon** source (256²) | ✅ identical |
 | `app-icon.svg` | Marketplace / GitHub App **listing icon** (512², padded tile + teal egress glow) | ✅ identical |
 | `social-preview.svg` | GitHub repo social preview (1280×640) | ⚠️ per-repo title |
@@ -41,9 +41,12 @@ in the same change. Only `social-preview.svg` is allowed to differ.
 
 ## Typography
 
-- **Display / wordmark:** a geometric humanist sans (e.g. *Space Grotesk*,
-  *Inter Tight*). The SVGs ship the wordmark as **outlined paths / system
-  fallback** so they render without a webfont.
+- **Display / wordmark:** a geometric humanist sans (*Space Grotesk*,
+  *Inter Tight*). The wordmark is **live `<text>` with a `system-ui` fallback
+  stack**, drawn on a dark card (`logo.svg`) so the light lettering stays legible
+  on any page background - including a white README. When you rasterize with
+  `export.sh`, install *Space Grotesk* for a pixel-perfect wordmark; otherwise the
+  system fallback renders cleanly.
 - **Body:** *Inter* / system-ui.
 
 ## Exporting raster assets

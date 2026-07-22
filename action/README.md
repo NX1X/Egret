@@ -18,7 +18,7 @@ jobs:
       security-events: write    # required to upload SARIF to Code Scanning
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: NX1X/Egret/action@v0.1.0
+      - uses: NX1X/Egret@v0.1.0
         with:
           policy: .github/egret-policy.yaml
           mode: audit                # observe + report (default)

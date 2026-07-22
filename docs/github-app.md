@@ -87,7 +87,7 @@ jobs:
 
       - uses: actions/checkout@v4
 
-      - uses: NX1X/Egret/action@v0
+      - uses: NX1X/Egret@v0
         with:
           policy: .github/egret-policy.yaml
           mode: block
