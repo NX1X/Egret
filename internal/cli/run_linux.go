@@ -55,7 +55,7 @@ func executeRun(cmd *cobra.Command, pol *policy.Policy, command []string, disabl
 		if cred == nil {
 			return fmt.Errorf("--disable-sudo requires a non-root build user (run via sudo or set EGRET_BUILD_UID)")
 		}
-		restore, err := applyDisableSudo(int(cred.Uid))
+		restore, err := applyDisableSudo(cred.Uid)
 		if err != nil {
 			return fmt.Errorf("disable-sudo: %w", err)
 		}
@@ -175,8 +175,8 @@ func runCommand(ctx context.Context, command []string, dnsAddr string, cgroupFD 
 		// (the trampoline runs as root before dropping). (netsec F-A finding #1.)
 		guardedArgs := []string{
 			execGuardedCmdName,
-			"--uid", strconv.Itoa(int(cred.Uid)),
-			"--gid", strconv.Itoa(int(cred.Gid)),
+			"--uid", strconv.FormatUint(uint64(cred.Uid), 10),
+			"--gid", strconv.FormatUint(uint64(cred.Gid), 10),
 			"--",
 		}
 		guardedArgs = append(guardedArgs, command...)

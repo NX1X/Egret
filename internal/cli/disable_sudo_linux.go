@@ -34,14 +34,14 @@ func sudoersDenyContent(username string) string {
 // order) and the exact grant location vary by distro/runner. This is validated with
 // visudo, but the *effectiveness* of the deny (that `sudo -n` actually fails for the
 // build user afterwards) must be confirmed on a real runner before it's relied on.
-func applyDisableSudo(uid int) (restore func(), err error) {
+func applyDisableSudo(uid uint32) (restore func(), err error) {
 	if os.Geteuid() != 0 {
 		return nil, fmt.Errorf("must be root to modify sudoers (got euid %d)", os.Geteuid())
 	}
 	if uid == 0 {
 		return nil, fmt.Errorf("refusing to target uid 0")
 	}
-	u, err := user.LookupId(strconv.Itoa(uid))
+	u, err := user.LookupId(strconv.FormatUint(uint64(uid), 10))
 	if err != nil {
 		return nil, fmt.Errorf("resolving build uid %d: %w", uid, err)
 	}
