@@ -45,7 +45,7 @@ inputs:
     required: false
     default: "false"
   allow-pull-request-target:
-    description: "Permit running under pull_request_target (Egret runs your command as ROOT — only enable if you do NOT check out the PR head)."
+    description: "Permit running under pull_request_target (Egret runs your command as ROOT - only enable if you do NOT check out the PR head)."
     required: false
     default: "false"
   disable-sudo:
@@ -57,7 +57,7 @@ inputs:
     required: false
     default: ""
   ingest-token:
-    description: "Bearer token for the ingest endpoint. Pass a GitHub Actions secret (never a literal) — it is sent as a request header, never placed on a command line. Ignored unless ingest-url is set."
+    description: "Bearer token for the ingest endpoint. Pass a GitHub Actions secret (never a literal) - it is sent as a request header, never placed on a command line. Ignored unless ingest-url is set."
     required: false
     default: ""
   github-token:
@@ -99,7 +99,7 @@ runs:
       run: ${{ github.action_path }}/entrypoint.sh install
 
     # Inputs are passed via env (never interpolated into the run: script) so a
-    # crafted input can't inject shell — the classic Actions script-injection.
+    # crafted input can't inject shell - the classic Actions script-injection.
     - name: Run Egret
       id: run
       if: ${{ inputs.command != '' }}
@@ -122,7 +122,7 @@ runs:
       run: ${{ github.action_path }}/entrypoint.sh run
 
     # always() so the SARIF still uploads when the wrapped build fails or a
-    # block-mode violation trips the run step — exactly when the signal matters.
+    # block-mode violation trips the run step - exactly when the signal matters.
     - name: Upload SARIF to Code Scanning
       if: ${{ always() && inputs.command != '' && inputs.sarif == 'true' && inputs.upload-sarif == 'true' && steps.run.outputs.sarif-file != '' }}
       uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2

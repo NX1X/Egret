@@ -95,7 +95,7 @@ func Markdown(s *event.Session) string {
 	fmt.Fprintf(&b, "- **Connections:** %d · **Processes:** %d · **File writes:** %d · **Violations:** %d\n\n",
 		len(s.Connections), len(s.Processes), len(s.FileWrites), len(s.Violations))
 
-	// Violations first — the headline.
+	// Violations first - the headline.
 	if len(s.Violations) > 0 {
 		blocked := s.Mode == string(policy.ModeBlock)
 		verb := "Flagged"
@@ -167,7 +167,7 @@ func checkbox(b bool) string {
 	if b {
 		return "✅"
 	}
-	return "—"
+	return "-"
 }
 
 // mdEscape neutralises pipe and backtick so table cells don't break.

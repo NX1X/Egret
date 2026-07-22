@@ -1,7 +1,7 @@
 # Egret GitHub Action
 
-Run your build under [Egret](https://github.com/NX1X/Egret) — eBPF egress /
-process / file monitoring — and upload the findings to **GitHub Code Scanning**
+Run your build under [Egret](https://github.com/NX1X/Egret) - eBPF egress /
+process / file monitoring - and upload the findings to **GitHub Code Scanning**
 as SARIF.
 
 ## Usage
@@ -38,7 +38,7 @@ the **job summary**, and (by default) uploads the SARIF so findings show up unde
 > (which reads `$TOKEN`).
 
 > ⚠️ **Egret runs your command as root.** Never use this action in a
-> `pull_request_target` job that checks out the PR head — that would run untrusted
+> `pull_request_target` job that checks out the PR head - that would run untrusted
 > fork code as root with your secrets. The action refuses to run under
 > `pull_request_target` unless you set `allow-pull-request-target: true`. Prefer
 > GitHub-hosted (ephemeral) runners; on self-hosted runners a root compromise
@@ -49,11 +49,11 @@ the **job summary**, and (by default) uploads the SARIF so findings show up unde
 The `command` input is run as `sudo egret run --mode <mode> [--config <policy>]
 -- bash -c "<command>"`. Make it your whole build (a script, `make ci`, etc.) to
 cover the job. The input is passed to the entrypoint via an environment variable
-and handed to `bash -c` as a single argument — it is **never interpolated into a
+and handed to `bash -c` as a single argument - it is **never interpolated into a
 `run:` script**, so it can't inject steps into the Action itself.
 
 Transparent tracing of *every* step without a wrapper needs a pre-job daemon and
-is a self-hosted-runner concern — a planned enhancement. Omit `command` to just
+is a self-hosted-runner concern - a planned enhancement. Omit `command` to just
 install the binary and call `egret run` yourself.
 
 ## Inputs
@@ -69,7 +69,7 @@ install the binary and call `egret run` yourself.
 | `fail-on-violations` | `false` | Fail the job if Egret records any policy violation. |
 | `output-dir` | `$RUNNER_TEMP/egret/report` | Where reports are written. |
 | `allow-build-from-source` | `false` | If no **verified** release is available, build from source (unpinned). Off = fail closed. |
-| `allow-pull-request-target` | `false` | Permit running under `pull_request_target` (root + secrets — see warning above). |
+| `allow-pull-request-target` | `false` | Permit running under `pull_request_target` (root + secrets - see warning above). |
 
 Installed release binaries are **checksum-verified** against the release's
 `SHA256SUMS` before running; if verification isn't possible the action fails
@@ -85,8 +85,8 @@ closed (it never runs an unverified binary as root).
 
 ## Permissions
 
-- `security-events: write` — to upload SARIF (only when `upload-sarif: true`).
-- `contents: read` — checkout.
+- `security-events: write` - to upload SARIF (only when `upload-sarif: true`).
+- `contents: read` - checkout.
 
 The `github/codeql-action/upload-sarif` step is SHA-pinned per the repo's
 supply-chain policy (all third-party actions are pinned to a full commit SHA).

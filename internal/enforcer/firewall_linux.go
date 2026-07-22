@@ -14,13 +14,13 @@ import (
 	"github.com/NX1X/Egret/internal/policy"
 )
 
-// selfProbeCanaryIP is an RFC 5737 TEST-NET-1 address — never a real destination,
+// selfProbeCanaryIP is an RFC 5737 TEST-NET-1 address - never a real destination,
 // never allowlisted. A cgroup-scoped rule drops+counts packets to it; the self-probe
 // sends one from the build cgroup and reads the counter to confirm the cgroup egress
 // match actually fires for the build (fail-closed if it doesn't). (netsec F-C.)
 //
-// The probe is IPv4-only. That still validates the thing F-C is about — whether the
-// `socket cgroupv2` match fires for THIS cgroup — because that match keys on the
+// The probe is IPv4-only. That still validates the thing F-C is about - whether the
+// `socket cgroupv2` match fires for THIS cgroup - because that match keys on the
 // socket's cgroup, not the packet's L3 family (it is family-agnostic). IPv6
 // non-allowlisted egress is denied by the same family-agnostic terminal `counter
 // drop`. A v6-specific cgroup-match anomaly is a documented low-likelihood residual
@@ -33,7 +33,7 @@ const selfProbeCanaryIP = "192.0.2.1"
 // inet table `egret` with v4+v6 allow sets so teardown is a single table drop.
 //
 // The filter is SCOPED to the monitored build's cgroup via `socket cgroupv2`, so
-// Egret's own traffic — critically the DNS proxy's upstream query — is never
+// Egret's own traffic - critically the DNS proxy's upstream query - is never
 // filtered (otherwise block mode deadlocks: it can't resolve anything). The build
 // is placed into that cgroup by run_linux.go via SysProcAttr.UseCgroupFD.
 //
@@ -191,7 +191,7 @@ func (f *nftFirewall) Teardown() error {
 	defer f.mu.Unlock()
 	// Kill the build cgroup BEFORE deleting the table (fail-closed order). Close()
 	// below calls Kill() again, but that second call is a no-op once cgroup.procs is
-	// empty — this explicit one is here only to precede the table delete.
+	// empty - this explicit one is here only to precede the table delete.
 	f.cg.Kill()
 	var firstErr error
 	if f.upDone {

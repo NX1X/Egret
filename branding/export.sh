@@ -30,4 +30,4 @@ render icon.svg           favicon-180.png       180  180   # apple-touch-icon
 render app-icon.svg       app-icon-512.png      512  512   # Marketplace / App listing
 render logo.svg           logo.png              640  180
 render social-preview.svg social-preview.png    1280 640   # GitHub Settings → Social preview
-echo "Done. PNGs are in branding/png/ (git-ignored — regenerate as needed)."
+echo "Done. PNGs are in branding/png/ (git-ignored - regenerate as needed)."

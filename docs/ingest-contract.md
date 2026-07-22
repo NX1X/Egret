@@ -3,7 +3,7 @@
 This is the **only** coupling between the Egret agent and the optional
 self-hosted dashboard. The agent produces an **Envelope**; the dashboard
 consumes it. The agent has no other knowledge of the server, and when
-`EGRET_INGEST_URL` is unset it does nothing here — the dashboard is never
+`EGRET_INGEST_URL` is unset it does nothing here - the dashboard is never
 required (see [ROADMAP.md](ROADMAP.md) core invariant).
 
 Source of truth: `internal/ingest` in `Egret`. Wire format: JSON.
@@ -12,7 +12,7 @@ Source of truth: `internal/ingest` in `Egret`. Wire format: JSON.
 
 - The agent `POST`s the Envelope as `application/json` to `EGRET_INGEST_URL`.
 - If `EGRET_INGEST_TOKEN` is set, it is sent as `Authorization: Bearer <token>`.
-- Any non-2xx response is logged and ignored — a failed POST never fails a build.
+- Any non-2xx response is logged and ignored - a failed POST never fails a build.
 - Alternatively, a self-hoster can skip the POST and have their server pull the
   `report.json` artifact via a GitHub `workflow_run` webhook. Same Envelope shape
   applies (wrap the session with the same metadata).
@@ -35,7 +35,7 @@ Source of truth: `internal/ingest` in `Egret`. Wire format: JSON.
     "run_attempt": "1",
     "actor": "NX1X"
   },
-  "session": { /* the event.Session — see report.json */ }
+  "session": { /* the event.Session - see report.json */ }
 }
 ```
 

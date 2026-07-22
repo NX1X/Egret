@@ -1,4 +1,4 @@
-# Binaries (root-built artifact only — NOT the cmd/egret source dir)
+# Binaries (root-built artifact only - NOT the cmd/egret source dir)
 /egret
 *.exe
 *.dll

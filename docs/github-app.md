@@ -1,8 +1,8 @@
-# Egret GitHub App (server-less) — setup guide
+# Egret GitHub App (server-less) - setup guide
 
 Egret can run with **no App at all** (Tier 1). Adding a GitHub App unlocks
 org-wide policy, CI-triggering auto-PRs, branded checks/comments, and the issue
-dashboard — **without any server**, because the workflow mints the App token and
+dashboard - **without any server**, because the workflow mints the App token and
 *is* the compute. A webhook (the only part that would need a server) is **not**
 used.
 
@@ -18,7 +18,7 @@ See [ROADMAP.md](ROADMAP.md) Tier 2 for where this fits.
 |---|---|
 | **GitHub App name** | `Egret` (globally unique; else `Egret Security`). Becomes `egret[bot]`. |
 | **Homepage URL** | `https://github.com/NX1X/Egret` |
-| **Callback URL, Expire user tokens, Request user OAuth, Device Flow** | Leave blank / disabled — these are for user login flows Egret doesn't use. |
+| **Callback URL, Expire user tokens, Request user OAuth, Device Flow** | Leave blank / disabled - these are for user login flows Egret doesn't use. |
 | **Setup URL, Redirect on update** | Leave blank. |
 | **Webhook → Active** | **Uncheck.** Leave Webhook URL + Secret blank. |
 | **Subscribe to events** | None (no webhook). |
@@ -44,7 +44,7 @@ Add per feature:
 | Security events | Read & write | SARIF → Code Scanning |
 | Actions | Read | read workflow run artifacts |
 
-Keep permissions minimal — this is a security tool; least privilege is the point.
+Keep permissions minimal - this is a security tool; least privilege is the point.
 
 ---
 
@@ -56,8 +56,8 @@ After creating the App:
 2. **Generate a private key** → downloads a `.pem` file. Store it safely; GitHub
    keeps only the public half.
 3. Add secrets to the repo (or org, for reuse):
-   - `EGRET_APP_ID` — the numeric App ID (can be a variable instead of a secret).
-   - `EGRET_APP_PRIVATE_KEY` — the full contents of the `.pem`.
+   - `EGRET_APP_ID` - the numeric App ID (can be a variable instead of a secret).
+   - `EGRET_APP_PRIVATE_KEY` - the full contents of the `.pem`.
 4. **Install** the App on your account/repos: the App's page → *Install App*.
 
 ---
@@ -97,7 +97,7 @@ jobs:
 
 When `github-token` is not provided, Egret falls back to the default
 `GITHUB_TOKEN` and simply skips the App-only features (org policy, CI-triggering
-PRs, branded identity). **Nothing about the App is required** — it is pure
+PRs, branded identity). **Nothing about the App is required** - it is pure
 enhancement, per the roadmap invariant.
 
 ---

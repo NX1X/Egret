@@ -28,7 +28,7 @@ func newAuditCmd() *cobra.Command {
 		Use:   "audit",
 		Short: "Turn an observed run into a suggested egress allowlist",
 		Long: `Audit analyzes the JSON report of a prior monitored run and emits a
-suggested egress allowlist — printed, written to a file, and/or opened as a PR.
+suggested egress allowlist - printed, written to a file, and/or opened as a PR.
 
   1. Observe:  sudo egret run --mode audit --config policy.yaml -- ./build.sh
   2. Suggest:  egret audit --from hardened-report/report.json --emit policy.suggested.yaml

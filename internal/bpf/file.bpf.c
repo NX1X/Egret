@@ -1,6 +1,6 @@
 //go:build ignore
 
-// file.bpf.c — observe writes to the filesystem.
+// file.bpf.c - observe writes to the filesystem.
 //
 // Attaches to the sys_enter_openat tracepoint and emits a file_event only when
 // the open carries write intent (O_WRONLY | O_RDWR | O_CREAT | O_TRUNC). The

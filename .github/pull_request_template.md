@@ -22,7 +22,7 @@ Closes #
 - [ ] New/changed behavior is covered by a test
 - [ ] No secrets, tokens, or captured payloads in code, logs, or fixtures
 
-## Security-sensitive paths (tick if touched — extra review required)
+## Security-sensitive paths (tick if touched - extra review required)
 
 - [ ] `internal/enforcer/` or `internal/bpf/network.bpf.c` → **network-security review required** (egress-bypass + fail-closed teardown)
 - [ ] `internal/bpf/` or `internal/collector/` → eBPF review (verifier / CO-RE)

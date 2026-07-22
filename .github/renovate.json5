@@ -1,19 +1,19 @@
 {
   // ═══════════════════════════════════════════════════════════════════════════
-  //  RENOVATE CONFIG — Egret (Go modules + GitHub Actions)
+  //  RENOVATE CONFIG - Egret (Go modules + GitHub Actions)
   //  Renovate reads this from .github/renovate.json5 automatically.
   //
   //  SELF-CONTAINED: the dependency policy is inlined here rather than fetched
   //  from a shared preset repo, so Renovate has no external preset dependency.
   //
-  //  Posture: MANUAL MERGE — nothing automerges; every update lands as a PR.
+  //  Posture: MANUAL MERGE - nothing automerges; every update lands as a PR.
   //  14-day supply-chain cooldown, OSV + OpenSSF alerts, SHA-pinned
   //  actions, dependency dashboard.
   // ═══════════════════════════════════════════════════════════════════════════
 
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
 
-  // Public Renovate presets only — these always resolve.
+  // Public Renovate presets only - these always resolve.
   //   config:best-practices  → pin Action SHAs + dev deps, npm release-age cooldown
   //   security:openssf-scorecard → OpenSSF Scorecard badge on every PR
   "extends": [

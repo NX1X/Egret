@@ -92,7 +92,7 @@ func TestPostNon2xxIsError(t *testing.T) {
 }
 
 // TestPostRefusesCleartextTokenToRemote: a bearer token must never go out over
-// plaintext http to a non-loopback host — Post refuses before making the request.
+// plaintext http to a non-loopback host - Post refuses before making the request.
 func TestPostRefusesCleartextTokenToRemote(t *testing.T) {
 	err := Post(context.Background(), "http://dashboard.example.com/ingest", "sekret",
 		NewEnvelope(&event.Session{}, RunMeta{}, ""))
@@ -102,7 +102,7 @@ func TestPostRefusesCleartextTokenToRemote(t *testing.T) {
 }
 
 // TestPostAllowsHTTPToLoopback: http is fine to localhost (a same-host dashboard),
-// where nothing traverses a network — the httptest server binds 127.0.0.1.
+// where nothing traverses a network - the httptest server binds 127.0.0.1.
 func TestPostAllowsHTTPToLoopback(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusAccepted)

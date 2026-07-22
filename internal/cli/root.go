@@ -17,7 +17,7 @@ func newRootCmd() *cobra.Command {
 		Short: "Runtime security agent for CI/CD and Linux hosts",
 		Long: `Egret monitors and enforces the runtime behaviour of a command:
 network egress (default-deny domain allowlist), process tree, and writes to
-protected paths — then emits a report. Zero infrastructure, no phone-home.`,
+protected paths - then emits a report. Zero infrastructure, no phone-home.`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}

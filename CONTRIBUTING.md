@@ -1,7 +1,7 @@
 # Contributing to Egret
 
 Thanks for helping build Egret. This project pairs a Go userspace agent with
-eBPF C programs, so a few things are stricter than a typical repo — mostly
+eBPF C programs, so a few things are stricter than a typical repo - mostly
 around the egress enforcer and the build toolchain.
 
 ## Ground rules
@@ -9,7 +9,7 @@ around the egress enforcer and the build toolchain.
 - Read [docs/ROADMAP.md](docs/ROADMAP.md) first.
 - Keep PRs small and focused. One concern per PR.
 - Every user-facing change updates [CHANGELOG.md](CHANGELOG.md).
-- Be excellent to each other — see [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
+- Be excellent to each other - see [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
 
 ## Development setup
 
@@ -42,7 +42,7 @@ If you don't have a Linux box, the eBPF integration tests run in a kernel VM.
 
 | If your change touches… | Then… |
 |---|---|
-| `internal/enforcer/` or `internal/bpf/network.bpf.c` | **a network-security review must sign off** — egress-bypass + fail-closed teardown |
+| `internal/enforcer/` or `internal/bpf/network.bpf.c` | **a network-security review must sign off** - egress-bypass + fail-closed teardown |
 | `internal/bpf/` or `internal/collector/` | an eBPF review; verifier/CO-RE checks |
 | any Go | a Go review (idioms, error handling, resource cleanup) |
 | `go.mod` / `go.sum` | a supply-chain audit + a `docs/DEPENDENCIES.md` entry; 7-day cooldown |
@@ -53,7 +53,7 @@ network, dependencies, or workflows.
 
 ## Adding a dependency
 
-Egret keeps its dependency surface **minimal and pure-Go where possible** —
+Egret keeps its dependency surface **minimal and pure-Go where possible** -
 justify every new module in [docs/DEPENDENCIES.md](docs/DEPENDENCIES.md).
 
 ## Tests

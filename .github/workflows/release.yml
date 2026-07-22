@@ -50,7 +50,7 @@ jobs:
       - name: Validate release tag format
         run: |
           # Reject anything that isn't vMAJOR.MINOR.PATCH before we check out that
-          # ref or spend ~20 min building — guards a mistyped manual-dispatch input
+          # ref or spend ~20 min building - guards a mistyped manual-dispatch input
           # (e.g. a branch name) from reaching checkout/build/publish.
           [[ "${TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
             echo "::error::TAG '${TAG}' is not a vMAJOR.MINOR.PATCH release tag."; exit 1; }
@@ -85,7 +85,7 @@ jobs:
           # Sanity: the Action installer greps this exact asset name.
           grep -qE "  ?egret_linux_amd64$" SHA256SUMS
 
-      # SLSA build provenance (keyless, OIDC) — lets consumers verify the binary was
+      # SLSA build provenance (keyless, OIDC) - lets consumers verify the binary was
       # built by this workflow:  gh attestation verify egret_linux_amd64 --repo NX1X/Egret
       - name: Attest build provenance
         uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1

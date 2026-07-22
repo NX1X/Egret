@@ -34,17 +34,17 @@ func addPlatformCommands(root *cobra.Command) {
 // as root INSIDE the build cgroup (no SysProcAttr.Credential), and this command
 // then makes the drop UNRECOVERABLE before exec'ing the build:
 //
-//  1. PR_SET_NO_NEW_PRIVS=1 — a later execve of a setuid-root or file-capability
+//  1. PR_SET_NO_NEW_PRIVS=1 - a later execve of a setuid-root or file-capability
 //     binary (sudo, mount, ping, newgrp) can NEVER regain privilege. This is the
 //     lock SysProcAttr.Credential alone does not give: dropping to a non-root uid
 //     still lets `sudo` re-escalate; no_new_privs closes that hole (netsec F-A).
-//  2. Drop the entire capability BOUNDING set — so even a file-capability binary
+//  2. Drop the entire capability BOUNDING set - so even a file-capability binary
 //     can't hand back CAP_NET_ADMIN/CAP_SYS_ADMIN (belt to no_new_privs' braces).
 //  3. setgroups([]) / setgid / setuid to the non-root build user, in that order.
-//  4. execve the build — it inherits the cgroup (exec does not move cgroups), the
+//  4. execve the build - it inherits the cgroup (exec does not move cgroups), the
 //     no_new_privs bit, and the empty bounding set.
 //
-// Any failure exits non-zero WITHOUT exec'ing the build — fail-closed, so a build
+// Any failure exits non-zero WITHOUT exec'ing the build - fail-closed, so a build
 // never runs with more privilege than intended.
 func newExecGuardedCmd() *cobra.Command {
 	var uid, gid int
@@ -81,7 +81,7 @@ func runtimeCapLastCap() int {
 // execGuarded applies the irreversible privilege drop then execs command. On
 // success it never returns (the process image is replaced by the build).
 func execGuarded(uid, gid int, command []string) error {
-	// Refuse to "drop" to root — that would defeat the entire boundary. The parent
+	// Refuse to "drop" to root - that would defeat the entire boundary. The parent
 	// only ever calls us with a real non-root uid/gid, but verify fail-closed.
 	if uid <= 0 || gid <= 0 {
 		return fmt.Errorf("%s: refusing to run without a non-root uid/gid (got uid=%d gid=%d)",
@@ -91,7 +91,7 @@ func execGuarded(uid, gid int, command []string) error {
 	// prctl(no_new_privs), PR_CAPBSET_DROP and the exec are all thread-local
 	// operations that must happen on the SAME OS thread the process finally execs
 	// from. Pin the goroutine to its thread so a reschedule can't move the execve
-	// onto a thread that never got no_new_privs. We never unlock — we exec or exit.
+	// onto a thread that never got no_new_privs. We never unlock - we exec or exit.
 	runtime.LockOSThread()
 
 	// Resolve the binary against PATH now, while we can still report a clean error
@@ -101,7 +101,7 @@ func execGuarded(uid, gid int, command []string) error {
 		return fmt.Errorf("%s: %w", execGuardedCmdName, err)
 	}
 
-	// 1. no_new_privs — the crucial lock, set before the build's execve.
+	// 1. no_new_privs - the crucial lock, set before the build's execve.
 	if err := unix.Prctl(unix.PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0); err != nil {
 		return fmt.Errorf("set no_new_privs: %w", err)
 	}
@@ -113,7 +113,7 @@ func execGuarded(uid, gid int, command []string) error {
 	_ = unix.Prctl(unix.PR_CAP_AMBIENT, uintptr(unix.PR_CAP_AMBIENT_CLEAR_ALL), 0, 0, 0)
 
 	// 2. Empty the capability bounding set (needs CAP_SETPCAP, which we still hold
-	//    as root — must run before the uid drop). Bound the loop by the RUNNING
+	//    as root - must run before the uid drop). Bound the loop by the RUNNING
 	//    kernel's cap_last_cap (not the build-time constant), so a kernel newer than
 	//    our build still has its full set emptied; the EINVAL break is the backstop.
 	//    (netsec F-A finding #2.)
@@ -130,7 +130,7 @@ func execGuarded(uid, gid int, command []string) error {
 	// 3. Drop group memberships, then gid, then uid. Order matters: once uid is
 	//    non-root the setgid/setgroups calls would fail. Use the stdlib syscall
 	//    wrappers, which apply the change to EVERY OS thread (Go 1.16+), not just
-	//    this one — so no sibling runtime thread lingers as root.
+	//    this one - so no sibling runtime thread lingers as root.
 	if err := syscall.Setgroups([]int{}); err != nil {
 		return fmt.Errorf("setgroups: %w", err)
 	}

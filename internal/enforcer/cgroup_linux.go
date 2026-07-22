@@ -17,11 +17,11 @@ const cgroupRoot = "/sys/fs/cgroup"
 
 // buildCgroup is a dedicated cgroup-v2 the monitored command is placed into, so
 // the nftables egress filter can scope to the build (via `socket cgroupv2`) and
-// leave Egret's own traffic — notably the DNS proxy's upstream query — unfiltered.
+// leave Egret's own traffic - notably the DNS proxy's upstream query - unfiltered.
 //
 // Placement is guaranteed by the kernel: the build is created directly inside this
 // cgroup via clone3(CLONE_INTO_CGROUP) (SysProcAttr.UseCgroupFD). If that fails the
-// exec fails and the run aborts — fail-closed, no unconfined build ever runs.
+// exec fails and the run aborts - fail-closed, no unconfined build ever runs.
 //
 // The nft match is computed from the cgroup's ACTUAL path/depth (not a hardcoded
 // level), so it is correct whether the cgroup sits at the v2 root or under a
@@ -36,7 +36,7 @@ type buildCgroup struct {
 // newBuildCgroup creates the cgroup and opens its directory fd. Prefers a
 // v2-root-level cgroup (simple, level 1); falls back to a child of Egret's own
 // cgroup when the root is not writable (delegated/containerized). Requires cgroup
-// v2 and root — both hold when block mode is active.
+// v2 and root - both hold when block mode is active.
 func newBuildCgroup() (*buildCgroup, error) {
 	if _, err := os.Stat(filepath.Join(cgroupRoot, "cgroup.controllers")); err != nil {
 		return nil, fmt.Errorf("cgroup v2 unified hierarchy not found at %s (block mode needs it): %w", cgroupRoot, err)
@@ -99,7 +99,7 @@ func (c *buildCgroup) fd() int { return int(c.dir.Fd()) }
 // or daemonized that outlived the monitored command can't linger with a live
 // socket after teardown. It writes "1" to cgroup.kill (kernel 5.14+), which kills
 // the whole subtree atomically; on older kernels cgroup.kill is absent, so it
-// falls back to SIGKILLing each pid listed in cgroup.procs. Best-effort — teardown
+// falls back to SIGKILLing each pid listed in cgroup.procs. Best-effort - teardown
 // continues regardless. (netsec F-E.)
 func (c *buildCgroup) Kill() {
 	if c == nil {
@@ -110,11 +110,11 @@ func (c *buildCgroup) Kill() {
 		return
 	}
 	// Pre-5.14 fallback: no cgroup.kill. Freeze the subtree FIRST so a task can't
-	// fork a new (unlisted) child while we're killing — a plain read-then-kill would
+	// fork a new (unlisted) child while we're killing - a plain read-then-kill would
 	// let a build that re-forks during teardown leave a survivor. Freezing is
 	// asynchronous, so we then loop read+SIGKILL until cgroup.procs is empty (each
 	// pass kills anything that slipped in before the freeze fully took), and thaw at
-	// the end so the killed tasks can exit and be reaped. Best-effort — a genuinely
+	// the end so the killed tasks can exit and be reaped. Best-effort - a genuinely
 	// race-free kill needs the 5.14 cgroup.kill above; this closes most of the
 	// window on old kernels. (netsec F-E fallback finding.)
 	freeze := filepath.Join(c.absPath, "cgroup.freeze")
@@ -153,7 +153,7 @@ func (c *buildCgroup) Close() error {
 		if err = os.Remove(c.absPath); err == nil || os.IsNotExist(err) {
 			return nil
 		}
-		// EBUSY: tasks not yet reaped after the kill — give the kernel a moment.
+		// EBUSY: tasks not yet reaped after the kill - give the kernel a moment.
 		time.Sleep(10 * time.Millisecond)
 	}
 	return fmt.Errorf("removing build cgroup %s: %w", c.absPath, err)

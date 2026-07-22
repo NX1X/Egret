@@ -1,4 +1,4 @@
-# Egret — build & dev tasks.
+# Egret - build & dev tasks.
 #
 # eBPF codegen (`make generate`) and the full Linux build require a Linux host
 # with clang + kernel BTF. The cross-platform packages build anywhere.
@@ -33,7 +33,7 @@ VMLINUX := internal/bpf/vmlinux.h
 ##   kernel exposing /sys/kernel/btf/vmlinux (GitHub ubuntu runners do).
 $(VMLINUX):
 	@command -v bpftool >/dev/null || { echo "bpftool not found: apt install linux-tools-generic (or linux-tools-common)"; exit 1; }
-	@test -f /sys/kernel/btf/vmlinux || { echo "kernel BTF missing (/sys/kernel/btf/vmlinux) — need a BTF-enabled kernel"; exit 1; }
+	@test -f /sys/kernel/btf/vmlinux || { echo "kernel BTF missing (/sys/kernel/btf/vmlinux) - need a BTF-enabled kernel"; exit 1; }
 	bpftool btf dump file /sys/kernel/btf/vmlinux format c > $(VMLINUX)
 
 vmlinux: $(VMLINUX)

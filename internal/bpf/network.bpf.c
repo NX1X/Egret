@@ -1,6 +1,6 @@
 //go:build ignore
 
-// network.bpf.c — observe outbound connections.
+// network.bpf.c - observe outbound connections.
 //
 // Attaches to tcp_v4_connect / tcp_v6_connect (kprobes) and emits one
 // conn_event per outbound TCP connection over a ring buffer. UDP (udp_sendmsg)
@@ -41,7 +41,7 @@ struct {
 // 2nd arg of tcp_v{4,6}_connect), NOT `sk`. At kprobe *entry* the destination
 // fields on `sk` (skc_daddr/skc_dport) are not yet populated, so they come
 // back zero; the sockaddr argument is the address the app is connecting to and
-// is fully populated on entry. Ports (sin_port/sin6_port) are __be16 — kept in
+// is fully populated on entry. Ports (sin_port/sin6_port) are __be16 - kept in
 // network byte order; userspace does ntohs. All reads go through BPF_CORE_READ
 // for CO-RE safety.
 static __always_inline int submit_tcp4(struct sockaddr_in *sin)

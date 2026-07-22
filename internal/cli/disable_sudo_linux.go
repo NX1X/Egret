@@ -28,7 +28,7 @@ func sudoersDenyContent(username string) string {
 // validated sudoers drop-in, and returns a restore func that removes it. Egret
 // must be root (it is, in block mode). Fail-closed: if the file can't be written
 // or does not pass `visudo -cf`, it is removed and an error returned so the caller
-// aborts — the build never runs with the sudo the operator asked to remove.
+// aborts - the build never runs with the sudo the operator asked to remove.
 //
 // NOTE (needs the live re-gate): sudoers precedence (last-match / sudoers.d lexical
 // order) and the exact grant location vary by distro/runner. This is validated with

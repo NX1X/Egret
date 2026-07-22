@@ -24,7 +24,7 @@ const (
 	afInet6 = 10
 )
 
-// Raw wire structs — these MUST match the C structs in internal/bpf byte for
+// Raw wire structs - these MUST match the C structs in internal/bpf byte for
 // byte. bpf programs are compiled little-endian (bpfel) on the common arches;
 // integer fields are read host-endian, except dport which is network order.
 type connEventRaw struct {

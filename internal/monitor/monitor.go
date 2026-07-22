@@ -2,7 +2,7 @@
 // event.Session, evaluating each against the policy as it arrives. It is
 // deliberately platform-neutral and depends only on the collector interface and
 // a Resolver, so the full run orchestration can be unit-tested with a mock
-// collector — no kernel required.
+// collector - no kernel required.
 package monitor
 
 import (
@@ -14,8 +14,8 @@ import (
 )
 
 // Source is the stream of kernel events the monitor drains. It is satisfied by
-// *collector.LinuxCollector (and by mocks). Declaring the interface here — at
-// the consumer — keeps this package free of the eBPF/collector dependency, so
+// *collector.LinuxCollector (and by mocks). Declaring the interface here - at
+// the consumer - keeps this package free of the eBPF/collector dependency, so
 // it compiles and tests on any platform without generated bindings.
 type Source interface {
 	Connections() <-chan event.Connection

@@ -1,11 +1,11 @@
-// Package github is a minimal GitHub REST client for posting Egret results —
+// Package github is a minimal GitHub REST client for posting Egret results -
 // check runs, sticky PR comments, and the security dashboard issue. It uses only
 // the standard library (per the dependency policy) and a caller-supplied token
 // (a GitHub App installation token or the Actions GITHUB_TOKEN).
 //
 // The base URL is validated and defaults to the public API (or a vetted
 // GITHUB_API_URL for GHES); path segments are escaped. There is no
-// user-controlled destination host — no SSRF, and the token only ever travels
+// user-controlled destination host - no SSRF, and the token only ever travels
 // in the Authorization header over HTTPS.
 package github
 
@@ -38,7 +38,7 @@ type Client struct {
 
 // NewClient builds a client. The base URL comes from GITHUB_API_URL (set on
 // GitHub Enterprise + in Actions) but is only honored when it is https (or http
-// to loopback, for tests/local proxies) — otherwise the safe public-API default
+// to loopback, for tests/local proxies) - otherwise the safe public-API default
 // is used, so a misconfigured or tampered env var can never send the token to a
 // plaintext or attacker-controlled host.
 func NewClient(token string) *Client {
@@ -56,7 +56,7 @@ func NewClient(token string) *Client {
 }
 
 // allowedAPIURL permits https to any host, and http only to loopback (the token
-// never leaves the machine in that case — used by tests and local proxies).
+// never leaves the machine in that case - used by tests and local proxies).
 func allowedAPIURL(u *url.URL) bool {
 	if u.Scheme == "https" {
 		return true
@@ -75,7 +75,7 @@ func allowedAPIURL(u *url.URL) bool {
 
 // do issues an authenticated JSON request. If out is non-nil the (size-capped)
 // response body is decoded into it. Non-2xx responses become errors with a short
-// body snippet. The token appears only in the Authorization header — never in a
+// body snippet. The token appears only in the Authorization header - never in a
 // URL or error message.
 func (c *Client) newReq(ctx context.Context, method, path string, body any) (*http.Request, error) {
 	var rdr io.Reader
@@ -199,7 +199,7 @@ type issueComment struct {
 
 // UpsertStickyComment creates or updates a single comment on an issue/PR,
 // identified by an HTML-comment marker AND authored by the token's own bot
-// identity, so repeated runs edit one comment instead of spamming — and an
+// identity, so repeated runs edit one comment instead of spamming - and an
 // attacker cannot pre-plant a marked comment to hijack the update (author check).
 func (c *Client) UpsertStickyComment(ctx context.Context, owner, repo string, issueNumber int, marker, body string) error {
 	comments, err := getList[issueComment](c, ctx,
@@ -239,7 +239,7 @@ func (c *Client) UpsertDashboardIssue(ctx context.Context, owner, repo, title, m
 	}
 	full := marker + "\n" + body
 	for _, is := range issues {
-		if is.PullRequest != nil { // /issues includes PRs — never treat one as the dashboard
+		if is.PullRequest != nil { // /issues includes PRs - never treat one as the dashboard
 			continue
 		}
 		if is.User.Type == "Bot" && strings.Contains(is.Body, marker) {

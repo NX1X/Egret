@@ -10,7 +10,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// addPlatformCommands is a no-op off Linux — the guarded privilege-drop
+// addPlatformCommands is a no-op off Linux - the guarded privilege-drop
 // trampoline is a Linux-only path (block mode requires eBPF + a Linux kernel).
 func addPlatformCommands(_ *cobra.Command) {}
 

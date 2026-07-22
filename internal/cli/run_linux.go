@@ -33,7 +33,7 @@ func executeRun(cmd *cobra.Command, pol *policy.Policy, command []string, disabl
 	// Block mode is FAIL-CLOSED on privilege: it is only a confinement boundary if
 	// the build runs LESS privileged than Egret. If we can't drop the build to a
 	// non-root uid, refuse to enter block mode rather than run the build at Egret's
-	// (root) privilege — where it could `nft flush` or write itself out of the
+	// (root) privilege - where it could `nft flush` or write itself out of the
 	// cgroup, a silent egress bypass. (netsec re-gate F-B.) Refuse BEFORE any
 	// enforcer setup so nothing is half-applied.
 	if pol.IsBlocking() {
@@ -44,7 +44,7 @@ func executeRun(cmd *cobra.Command, pol *policy.Policy, command []string, disabl
 
 	// --disable-sudo: revoke the build user's passwordless sudo for the run (a belt
 	// to F-A's no_new_privs). It only makes sense when the build runs as a non-root
-	// user, which is block mode — refuse otherwise so the flag never silently no-ops.
+	// user, which is block mode - refuse otherwise so the flag never silently no-ops.
 	// Fail-closed: if the revoke can't be applied+validated, abort rather than run
 	// the build with the sudo the user asked us to remove still in place.
 	if disableSudo {
@@ -72,7 +72,7 @@ func executeRun(cmd *cobra.Command, pol *policy.Policy, command []string, disabl
 	if err != nil {
 		return err
 	}
-	// Teardown must run no matter how we exit — this restores the host network.
+	// Teardown must run no matter how we exit - this restores the host network.
 	defer func() {
 		if terr := teardown(); terr != nil {
 			fmt.Fprintln(os.Stderr, "egret: teardown error:", terr)
@@ -82,7 +82,7 @@ func executeRun(cmd *cobra.Command, pol *policy.Policy, command []string, disabl
 	// Block-mode self-probe (F-C): confirm the cgroup egress filter actually confines
 	// the build cgroup on THIS runner before trusting it. If a canary packet from the
 	// build cgroup isn't dropped, the cgroup match is missing (e.g. a namespaced
-	// container runner) and block mode would be silently fail-open — abort fail-closed
+	// container runner) and block mode would be silently fail-open - abort fail-closed
 	// (the deferred teardown restores the host).
 	if pol.IsBlocking() {
 		if err := runSelfProbe(ctx, enf); err != nil {
@@ -122,7 +122,7 @@ func executeRun(cmd *cobra.Command, pol *policy.Policy, command []string, disabl
 	}
 
 	// Optional self-hosted dashboard: when EGRET_INGEST_URL is set, ship the run.
-	// Best-effort — a failed POST never fails the build. Unset URL = no-op, so
+	// Best-effort - a failed POST never fails the build. Unset URL = no-op, so
 	// the dashboard stays entirely optional.
 	if url := os.Getenv("EGRET_INGEST_URL"); url != "" {
 		env := ingest.NewEnvelope(session, ingest.RunMetaFromEnv(), version)
@@ -152,7 +152,7 @@ func runCommand(ctx context.Context, command []string, dnsAddr string, cgroupFD 
 	var c *exec.Cmd
 	if cgroupFD >= 0 {
 		// Block mode: the cgroup filter is only a real boundary if the build runs LESS
-		// privileged than Egret — a root build could write itself out of the cgroup
+		// privileged than Egret - a root build could write itself out of the cgroup
 		// or `nft flush`. executeRun already refused block mode when no non-root
 		// credential is available; this is a defensive backstop (never run a root
 		// build under the enforcer's cgroup).
@@ -226,7 +226,7 @@ func buildCredential() (*syscall.Credential, string) {
 	}
 	if !ok {
 		return nil, "could not determine a non-root user for the build " +
-			"(no SUDO_UID/EGRET_BUILD_UID) — run via sudo, or set EGRET_BUILD_UID. " +
+			"(no SUDO_UID/EGRET_BUILD_UID) - run via sudo, or set EGRET_BUILD_UID. " +
 			"Block mode refuses to run the build at Egret's privilege (it could flush " +
 			"nft / escape the cgroup). Use audit mode if you can't drop privileges."
 	}

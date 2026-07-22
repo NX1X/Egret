@@ -39,7 +39,7 @@ jobs:
           go tool cover -func=coverage.out | tail -1
 
   # Full Linux build + test using the COMMITTED bpf2go bindings (checked in and
-  # embedded via go:embed) — needs no clang/bpftool/BTF. The regenerate-from-source
+  # embedded via go:embed) - needs no clang/bpftool/BTF. The regenerate-from-source
   # reproducibility check runs on the Linux dev VM, not on GitHub runners (their
   # kernel ships no matching bpftool to dump the CO-RE vmlinux.h).
   ebpf:
@@ -54,7 +54,7 @@ jobs:
       - run: go mod download
       - name: Build (from committed eBPF bindings)
         run: make build
-      - name: Test (full tree, incl. cli/collector — needs generated bindings)
+      - name: Test (full tree, incl. cli/collector - needs generated bindings)
         run: go test ./...
       - name: Smoke test
         run: ./bin/egret version

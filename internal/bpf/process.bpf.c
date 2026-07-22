@@ -1,6 +1,6 @@
 //go:build ignore
 
-// process.bpf.c — observe process execution.
+// process.bpf.c - observe process execution.
 //
 // Attaches to the sys_enter_execve tracepoint and emits one egret_proc_event per
 // exec. The egret_proc_event layout MUST match the Go procEvent struct in

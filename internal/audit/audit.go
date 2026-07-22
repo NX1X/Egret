@@ -1,4 +1,4 @@
-// Package audit turns an observed session into a suggested egress allowlist —
+// Package audit turns an observed session into a suggested egress allowlist -
 // the basis for `egret audit --emit policy.yaml`.
 package audit
 
@@ -61,7 +61,7 @@ func (sug Suggestion) Markdown() string {
 	}
 	if len(sug.RawIPs) > 0 {
 		fmt.Fprintf(&b, "> ⚠️ %d raw-IP destination(s) had no DNS lookup and are "+
-			"NOT in the suggested list — review manually:\n>\n", len(sug.RawIPs))
+			"NOT in the suggested list - review manually:\n>\n", len(sug.RawIPs))
 		for _, ip := range sug.RawIPs {
 			fmt.Fprintf(&b, "> - `%s`\n", ip)
 		}

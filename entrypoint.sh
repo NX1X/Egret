@@ -2,11 +2,11 @@
 # Egret GitHub Action entrypoint.
 #
 # Subcommands:
-#   install  — download + checksum-verify the egret binary onto the runner.
-#   run      — run a user command under `egret run`, emit report + SARIF, set
+#   install  - download + checksum-verify the egret binary onto the runner.
+#   run      - run a user command under `egret run`, emit report + SARIF, set
 #              step outputs, and (optionally) fail the job on violations.
 #
-# Whole-job scope: this wraps the command you pass via the `command` input — make
+# Whole-job scope: this wraps the command you pass via the `command` input - make
 # that your whole build (a script, or `make ci`) to cover the job. Transparent
 # tracing of *every* step without a wrapper needs a pre-job daemon and is a
 # self-hosted-runner concern (a planned enhancement); the wrapped-command model works
@@ -24,7 +24,7 @@ parse_tag_name() {
   sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1
 }
 
-# verify_checksum <tag> — download the release SHA256SUMS and verify BIN against
+# verify_checksum <tag> - download the release SHA256SUMS and verify BIN against
 # it. Fail closed: the binary runs as root, so an unverifiable download must not
 # proceed (pinning a version is not enough on its own without hash verification).
 verify_checksum() {
@@ -85,7 +85,7 @@ cmd_install() {
   echo "::endgroup::"
 }
 
-# count_violations <report.json> — number of entries in the "violations" array,
+# count_violations <report.json> - number of entries in the "violations" array,
 # using jq when present, else python3, else a conservative 0.
 count_violations() {
   local f="$1"
@@ -99,7 +99,7 @@ count_violations() {
   fi
 }
 
-# out <key> <value> — append a step output using the delimiter form, so a value
+# out <key> <value> - append a step output using the delimiter form, so a value
 # containing a newline can't forge additional outputs ($GITHUB_OUTPUT injection).
 out() {
   local key="$1" val="$2" delim="ghadelim_$$_${RANDOM}"
@@ -128,14 +128,14 @@ cmd_run() {
 
   echo "::group::Egret run (${EGRET_MODE:-audit} mode)"
   # Egret needs root/CAP_BPF; GitHub-hosted runners allow passwordless sudo. The
-  # user command is passed as a single argument to bash -c — never expanded into
-  # this script — so it runs exactly as written with no re-interpretation here.
+  # user command is passed as a single argument to bash -c - never expanded into
+  # this script - so it runs exactly as written with no re-interpretation here.
   #
   # The optional dashboard ingest URL/token reach the binary through the
   # ENVIRONMENT (never argv) so the bearer token is not visible in `ps` or
   # /proc/<pid>/cmdline. --preserve-env names them explicitly (belt) on top of
   # -E (suspenders) so delivery survives a stricter sudoers env_reset policy.
-  # Only ask sudo to preserve them when ingest is actually configured — a strict
+  # Only ask sudo to preserve them when ingest is actually configured - a strict
   # self-hosted sudoers that rejects --preserve-env then can't fail an ordinary
   # (no-ingest) run; it can only affect a run that opted into ingest.
   local sudo_env=()
@@ -178,7 +178,7 @@ cmd_run() {
   # installation token for org-wide + branded identity, or GITHUB_TOKEN). Each is
   # opt-in and SOFT-fails (a ::warning::, never a job failure) so a missing token
   # permission can't break the caller's build. The token travels as an env var to
-  # each subcommand — never on a command line (invisible in ps / cmdline).
+  # each subcommand - never on a command line (invisible in ps / cmdline).
   local want_publish="false"
   if [[ "${EGRET_CHECK_RUN:-false}" == "true" || "${EGRET_PR_COMMENT:-false}" == "true" || "${EGRET_DASHBOARD_ISSUE:-false}" == "true" ]]; then
     want_publish="true"

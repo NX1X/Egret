@@ -26,7 +26,7 @@ func TestSudoersDenyContent(t *testing.T) {
 	}
 }
 
-// TestApplyDisableSudoRefusesNonRoot: fail-closed — without root (the normal test
+// TestApplyDisableSudoRefusesNonRoot: fail-closed - without root (the normal test
 // context) applyDisableSudo must error and NOT leave a sudoers drop-in behind.
 func TestApplyDisableSudoRefusesNonRoot(t *testing.T) {
 	if os.Geteuid() == 0 {

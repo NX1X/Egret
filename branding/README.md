@@ -1,20 +1,20 @@
-# Egret — Brand assets
+# Egret - Brand assets
 
 This directory is the **single source of truth** for Egret's visual identity.
 It is **duplicated verbatim** in both repositories:
 
-- `NX1X/Egret` — the agent (CLI + GitHub Action)
-- `NX1X/Egret-Nest-Dashboard` — the dashboard
+- `NX1X/Egret` - the agent (CLI + GitHub Action)
+- `NX1X/Egret-Nest-Dashboard` - the dashboard
 
-Both projects share the **same logo, icon, wordmark, palette, and typography** —
+Both projects share the **same logo, icon, wordmark, palette, and typography** -
 they are one product family. The **only** asset that differs between the two is
 the GitHub **social preview** (`social-preview.svg`), whose title names the
 specific component:
 
 | Repo | Social-preview title |
 |---|---|
-| Egret (agent) | **Egret** — runtime egress security for CI/CD |
-| Egret Nest Dashboard | **Egret Nest** — the dashboard for your Egret fleet |
+| Egret (agent) | **Egret** - runtime egress security for CI/CD |
+| Egret Nest Dashboard | **Egret Nest** - the dashboard for your Egret fleet |
 
 Keep the two copies in sync: when an asset changes, update it in **both** repos
 in the same change. Only `social-preview.svg` is allowed to differ.
@@ -53,7 +53,7 @@ in the same change. Only `social-preview.svg` is allowed to differ.
 
 The SVGs are the masters. Run `./export.sh` to generate every PNG into `png/`
 (favicon 32, apple-touch 180, app-icon 512, logo, social-preview 1280×640). It
-uses whichever rasterizer is installed — `rsvg-convert` (`sudo apt-get install
+uses whichever rasterizer is installed - `rsvg-convert` (`sudo apt-get install
 librsvg2-bin`), `inkscape`, or `cairosvg`:
 
 ```bash
@@ -62,7 +62,7 @@ librsvg2-bin`), `inkscape`, or `cairosvg`:
 
 Then upload `png/social-preview.png` under **repo → Settings → Social preview**,
 and use `png/app-icon-512.png` for the GitHub App / Marketplace listing icon.
-(`png/` is git-ignored — regenerate as assets change.)
+(`png/` is git-ignored - regenerate as assets change.)
 
 ## Status
 

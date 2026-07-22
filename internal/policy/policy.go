@@ -1,5 +1,5 @@
 // Package policy parses policy.yaml and evaluates observed events against it.
-// It is the single source of truth for "is this allowed?" — the CLI, the
+// It is the single source of truth for "is this allowed?" - the CLI, the
 // enforcer, and the policy-lint skill all route decisions through Evaluate.
 package policy
 
@@ -110,7 +110,7 @@ func LoadWithResolver(path string, resolve Resolver) (*Policy, error) {
 // parsePolicy resolves `extends` (recursively) into a base policy, then overlays
 // this policy: scalars override the base (so a child can set block-raw-ip:false),
 // while list fields (allowed-endpoints, protected-paths, disallowed) are UNIONed
-// with the base — the common "org base + repo additions" case.
+// with the base - the common "org base + repo additions" case.
 func parsePolicy(raw []byte, baseDir string, resolve Resolver, depth int) (*Policy, error) {
 	if depth > maxExtendsDepth {
 		return nil, fmt.Errorf("`extends` nested too deeply (cycle?)")
@@ -262,7 +262,7 @@ func parseAllowedIPs(entries []string) ([]*net.IPNet, error) {
 			// canonicalizes to 0.0.0.0/0) would accept every destination and silently
 			// turn block mode into audit mode for a whole address family. (netsec F1/F2.)
 			if ones, _ := n.Mask.Size(); ones == 0 {
-				return nil, fmt.Errorf("%q is a default route (/0); that disables egress filtering — list specific hosts or subnets", e)
+				return nil, fmt.Errorf("%q is a default route (/0); that disables egress filtering - list specific hosts or subnets", e)
 			}
 			nets = append(nets, n)
 			continue

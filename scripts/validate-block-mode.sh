@@ -4,14 +4,14 @@
 #   sudo ./scripts/validate-block-mode.sh
 #
 # Proves the netsec re-gate fixes:
-#   F1 — the build runs as a NON-ROOT uid, so its cgroup-escape / `nft flush`
+#   F1 - the build runs as a NON-ROOT uid, so its cgroup-escape / `nft flush`
 #        attempts FAIL (permission denied) → it stays confined.
-#   #3 — block mode can resolve (egret's DNS upstream is unfiltered).
-#   #2 — allow-set entries carry a TTL.
-#   default-deny — a raw-IP (never-resolved) destination is blocked.
-#   F-A — no_new_privs + empty capability set: `sudo`/setuid can't re-escalate,
+#   #3 - block mode can resolve (egret's DNS upstream is unfiltered).
+#   #2 - allow-set entries carry a TTL.
+#   default-deny - a raw-IP (never-resolved) destination is blocked.
+#   F-A - no_new_privs + empty capability set: `sudo`/setuid can't re-escalate,
 #         /proc/self/status shows NoNewPrivs:1 and zero CapBnd/CapEff/CapAmb.
-#   F-E — a build-spawned daemon that outlives the command is cgroup.kill'd at
+#   F-E - a build-spawned daemon that outlives the command is cgroup.kill'd at
 #         teardown (no unconfined process left after the filter is removed).
 #
 # Expected PASS output: every "expect …" line matches, NoNewPrivs is 1 and all
@@ -38,9 +38,9 @@ YAML
 cat > /tmp/egret-block-build.sh <<'BUILD'
 set -u
 echo "  build uid=$(id -u) (expect NON-zero: F1 dropped privileges)"
-echo "  escape attempt 1 — move self out of the cgroup:"
+echo "  escape attempt 1 - move self out of the cgroup:"
 { echo $$ > /sys/fs/cgroup/cgroup.procs; } 2>&1 | sed 's/^/    /'; echo "    -> rc=${PIPESTATUS[0]} (expect NON-zero: denied)"
-echo "  escape attempt 2 — flush nft:"
+echo "  escape attempt 2 - flush nft:"
 nft flush ruleset 2>&1 | sed 's/^/    /'; echo "    -> rc=${PIPESTATUS[0]} (expect NON-zero: denied, no CAP_NET_ADMIN)"
 IP=$(dig +short @127.0.0.1 example.com A | grep -E '^[0-9]' | head -1)
 echo "  proxy-resolved example.com -> ${IP:-<none>} (non-empty: #3 upstream works)"
@@ -63,7 +63,7 @@ if command -v cc >/dev/null && cc -o /tmp/egret-suid-probe /tmp/egret-suid.c 2>/
   chown root:root /tmp/egret-suid-probe && chmod 4755 /tmp/egret-suid-probe
 fi
 
-# F-B — block mode is fail-closed on privilege: with NO non-root credential it must
+# F-B - block mode is fail-closed on privilege: with NO non-root credential it must
 # REFUSE (never run the build at egret's root privilege).
 echo "=== F-B: block mode refuses without a non-root credential ==="
 if env -u SUDO_UID -u EGRET_BUILD_UID ./bin/egret run --mode block \
@@ -79,7 +79,7 @@ echo "=== teardown clean? ==="
 nft list table inet egret >/dev/null 2>&1 && echo "  LEFTOVER nft table (BAD)" || echo "  no egret nft table (clean)"
 ls -d /sys/fs/cgroup/egret-run-* 2>/dev/null && echo "  LEFTOVER cgroup (BAD)" || echo "  no leftover cgroup (clean)"
 
-# F-E — a process the build spawns that outlives the monitored command must be
+# F-E - a process the build spawns that outlives the monitored command must be
 # killed at teardown (cgroup.kill), not left alive with a socket after the filter
 # is gone. Spawn a backgrounded + setsid'd sleep (leaves the session, stays in the
 # cgroup), record its pid, and after egret returns confirm it's dead.
@@ -95,7 +95,7 @@ else
   echo "  daemon ${DPID:-?} gone after teardown (expected: cgroup.kill worked)"
 fi
 
-# allowed-ips — a raw IP in the policy's allowed-ips must be REACHABLE in block mode
+# allowed-ips - a raw IP in the policy's allowed-ips must be REACHABLE in block mode
 # (installed as a static nft CIDR allow-set), while a different raw IP stays blocked.
 echo "=== allowed-ips: static IP/CIDR allow-set (block mode) ==="
 cat > /tmp/egret-ips-pol.yaml <<YAML
@@ -128,7 +128,7 @@ else
 fi
 rm -f /tmp/egret-ips-broad.yaml
 
-# disable-sudo — with --disable-sudo, the build user's passwordless sudo is revoked
+# disable-sudo - with --disable-sudo, the build user's passwordless sudo is revoked
 # for the run (belt to no_new_privs), then restored at teardown.
 echo "=== disable-sudo: build user's sudo revoked during the run ==="
 rm -f /etc/sudoers.d/zz-egret-no-sudo
@@ -171,7 +171,7 @@ rm -f /tmp/egret-ov.yaml
 # disable-sudo ISOLATED deny (netsec item 5): prove the sudoers drop-in itself
 # denies, independent of no_new_privs. Write the same deny by hand, then have the
 # BUILD USER attempt sudo (run the inner `sudo` AS the build user via
-# `sudo -u <builduser> -- sudo -n true` — NOT `sudo -u <builduser> -n true`, which
+# `sudo -u <builduser> -- sudo -n true` - NOT `sudo -u <builduser> -n true`, which
 # would test root's own privilege and always succeed). It must fail on the deny.
 echo "=== disable-sudo: isolated sudoers deny (no no_new_privs in play) ==="
 BUILDUSER=$(id -nu "${SUDO_UID}")
@@ -188,7 +188,7 @@ if sudo -u "$BUILDUSER" -- sudo -n true 2>/tmp/egret-deny.err; then
   echo "  -> build user's sudo SUCCEEDED with the deny in place (BAD: deny ineffective; baseline sudo=${BASELINE})"
 else
   if [ "$BASELINE" = no ]; then
-    echo "  -> denied, but build user had NO sudo even before the deny — inconclusive on this host"
+    echo "  -> denied, but build user had NO sudo even before the deny - inconclusive on this host"
   else
     echo "  -> denied (expected): the sudoers !ALL took effect independent of no_new_privs. msg: $(tr -d '\n' < /tmp/egret-deny.err | head -c 100)"
   fi

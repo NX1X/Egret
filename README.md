@@ -6,7 +6,7 @@
 
 > An open-source runtime security agent for CI/CD and generic Linux hosts.
 > Egress filtering, network/process/file monitoring, and audit-mode policy
-> generation — fully OSS, zero-infrastructure.
+> generation - fully OSS, zero-infrastructure.
 
 The name plays on **egress** (its core job) and the egret bird. CLI:
 `egret run -- ./build.sh`.
@@ -31,13 +31,13 @@ The name plays on **egress** (its core job) and the egret bird. CLI:
 
 Egret wraps a command and watches it through eBPF:
 
-- **Network egress** — records every outbound connection (PID, process, IP,
+- **Network egress** - records every outbound connection (PID, process, IP,
   port; domain when DNS is correlated).
-- **Egress enforcement** *(block mode)* — default-deny with a domain allowlist,
+- **Egress enforcement** *(block mode)* - default-deny with a domain allowlist,
   backed by a local DNS proxy + nftables dynamic allow set.
-- **Process tree** — `execve`/`fork` observation.
-- **File writes** — flags writes to protected paths (`.git/`, `~/.ssh/`, …).
-- **Audit mode** — observe a run, then emit a *suggested* allowlist.
+- **Process tree** - `execve`/`fork` observation.
+- **File writes** - flags writes to protected paths (`.git/`, `~/.ssh/`, …).
+- **Audit mode** - observe a run, then emit a *suggested* allowlist.
 
 Reports are written as Markdown + JSON, and appended to the GitHub Actions job
 summary when present. No server, no account, no phone-home.
@@ -91,7 +91,7 @@ jobs:
         with:
           policy: .github/egret-policy.yaml
           mode: audit                 # or: block
-          command: make ci            # your whole build — monitored end-to-end
+          command: make ci            # your whole build - monitored end-to-end
           fail-on-violations: true    # optional: fail the job on any violation
 ```
 
@@ -101,11 +101,11 @@ several steps.
 
 > ⚠️ Don't inline secrets in `command` (it's written to the job summary, where
 > masking is unreliable) and never run this action as a `pull_request_target`
-> job that checks out the PR head — it runs your command as **root**. See
+> job that checks out the PR head - it runs your command as **root**. See
 > [action/README.md](action/README.md) for details.
 >
 > ⚠️ Never derive `ingest-url` / `ingest-token` from untrusted PR content (title,
-> body, branch name) in a `pull_request_target` workflow — that would let a fork
+> body, branch name) in a `pull_request_target` workflow - that would let a fork
 > redirect the report POST (or the token) to an attacker. Use fixed values or
 > repo secrets. Egret refuses to send the token over cleartext `http://` (except
 > to `localhost`).
@@ -124,7 +124,7 @@ several steps.
 
 Outputs: `report-dir`, `sarif-file`, `violations`. See [action/](action/) for
 details. Transparent tracing of *every* step without a wrapper needs a pre-job
-daemon — a planned enhancement.
+daemon - a planned enhancement.
 
 ---
 
@@ -201,19 +201,19 @@ make build        # build ./bin/egret (Linux)
 ```
 
 The cross-platform packages (`policy`, `report`, `audit`, `event`) build and
-test on any OS. Anything under a `//go:build linux` tag — the collector and
-enforcer — needs a Linux kernel; eBPF integration tests run in a kernel VM.
+test on any OS. Anything under a `//go:build linux` tag - the collector and
+enforcer - needs a Linux kernel; eBPF integration tests run in a kernel VM.
 
 ---
 
 ## Roadmap
 
-Egret grows in three **strictly additive** tiers — nothing forces the next one:
+Egret grows in three **strictly additive** tiers - nothing forces the next one:
 
-1. **CLI + Action** (current) — zero infrastructure.
-2. **Server-less GitHub App** — org-wide policy, CI-triggering auto-PRs, branded
+1. **CLI + Action** (current) - zero infrastructure.
+2. **Server-less GitHub App** - org-wide policy, CI-triggering auto-PRs, branded
    checks, and a Renovate-style [issue dashboard](docs/github-app.md). No server.
-3. **Optional self-hosted server** (deferred) — history/dashboards you deploy on
+3. **Optional self-hosted server** (deferred) - history/dashboards you deploy on
    your own infra; your data never leaves it.
 
 See [docs/ROADMAP.md](docs/ROADMAP.md) for the full plan and the "server is never
@@ -224,7 +224,7 @@ required" invariant, and [docs/github-app.md](docs/github-app.md) to set up the 
 | Doc | Owns |
 |---|---|
 | [docs/ROADMAP.md](docs/ROADMAP.md) | What Egret is, what works, where it's going |
-| [CHANGELOG.md](CHANGELOG.md) | Released changes (agent not tagged yet — ships v1.0 with the dashboard) |
+| [CHANGELOG.md](CHANGELOG.md) | Released changes (agent not tagged yet - ships v1.0 with the dashboard) |
 | [docs/DEPENDENCIES.md](docs/DEPENDENCIES.md) | Dependency policy |
 | [docs/github-app.md](docs/github-app.md) | GitHub App setup |
 | [docs/ingest-contract.md](docs/ingest-contract.md) | The agent→dashboard envelope (only cross-repo seam) |
@@ -233,7 +233,7 @@ required" invariant, and [docs/github-app.md](docs/github-app.md) to set up the 
 
 Egress enforcement is domain-allowlist based and has some residual gaps (DoH/DoT,
 raw-IP, CDN IP rotation). **Block mode is a confinement boundary on bare/VM hosts;
-on GitHub-hosted / container runners it is still being validated — use `audit` mode
+on GitHub-hosted / container runners it is still being validated - use `audit` mode
 there for now.** Every change to the enforcer goes through a dedicated
 network-security review.
 
@@ -253,5 +253,5 @@ Go review and a network-security review for enforcer changes. See
 
 ## License
 
-Egret is licensed under the [Apache License 2.0](LICENSE) — © 2026 NX1X
+Egret is licensed under the [Apache License 2.0](LICENSE) - © 2026 NX1X
 ([nx1xlab.dev](https://nx1xlab.dev)). See [NOTICE](NOTICE) for attribution.

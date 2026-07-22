@@ -20,7 +20,7 @@ body:
     id: tier
     attributes:
       label: Which tier does this touch?
-      description: See docs/ROADMAP.md — Egret grows in strictly additive tiers.
+      description: See docs/ROADMAP.md - Egret grows in strictly additive tiers.
       options:
         - CLI + Action (tier 1)
         - Server-less GitHub App (tier 2)

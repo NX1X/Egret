@@ -4,7 +4,7 @@
 //
 // This is the ONLY coupling between the agent and any server: the agent writes
 // an Envelope and, if EGRET_INGEST_URL is set, POSTs it. When the URL is unset
-// the agent behaves exactly as before — the dashboard is never required.
+// the agent behaves exactly as before - the dashboard is never required.
 //
 // See docs/ingest-contract.md. Standard library only, per the dependency policy.
 package ingest
@@ -143,7 +143,7 @@ func requireSecureEndpoint(endpoint, token string) error {
 		return nil
 	}
 	if token != "" {
-		return fmt.Errorf("refusing to send the ingest bearer token in cleartext to %q — use https", endpoint)
+		return fmt.Errorf("refusing to send the ingest bearer token in cleartext to %q - use https", endpoint)
 	}
 	return fmt.Errorf("ingest url %q must be https (http is only allowed to localhost)", endpoint)
 }

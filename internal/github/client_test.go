@@ -99,7 +99,7 @@ func TestUpsertStickyComment(t *testing.T) {
 }
 
 // A marked comment authored by a non-bot (a user who pre-planted the marker)
-// must NOT be adopted — the run posts its own comment instead (hijack defense).
+// must NOT be adopted - the run posts its own comment instead (hijack defense).
 func TestStickyCommentIgnoresNonBotAuthor(t *testing.T) {
 	const marker = "<!-- egret-report -->"
 	var lastMethod string

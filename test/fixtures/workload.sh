@@ -4,7 +4,7 @@
 #
 # It deliberately mixes allowed and disallowed behaviour so a report/enforcement
 # run has something to show. Each step tolerates failure (|| true) so the
-# workload itself never aborts the run — Egret's job is to observe/enforce.
+# workload itself never aborts the run - Egret's job is to observe/enforce.
 set -u
 
 echo "[workload] allowed egress (in a typical allowlist)"

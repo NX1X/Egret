@@ -63,7 +63,7 @@ jobs:
       - name: Build egret (committed eBPF bindings; no codegen needed)
         run: go build -buildvcs=false -o bin/egret ./cmd/egret
 
-      - name: F-C re-gate — block mode in a namespaced container
+      - name: F-C re-gate - block mode in a namespaced container
         env:
           EGRET_BUILD_UID: "1000"
           EGRET_BUILD_GID: "1000"
@@ -81,10 +81,10 @@ jobs:
           if echo "$out" | grep -q "self-probe FAILED"; then
             echo "::notice::F-C fail-open DETECTED and refused (fail-closed). Self-probe works on a namespaced runner."
           elif echo "$out" | grep -q "RAW-REACHED"; then
-            echo "::error::RUNS + raw IP REACHED — fail-open NOT detected. Self-probe hole to fix."
+            echo "::error::RUNS + raw IP REACHED - fail-open NOT detected. Self-probe hole to fix."
             exit 1
           elif echo "$out" | grep -q "raw-blocked"; then
-            echo "::notice::cgroup match works even namespaced here — build confined."
+            echo "::notice::cgroup match works even namespaced here - build confined."
           else
             echo "::warning::inconclusive (egret aborted for another reason)."
           fi

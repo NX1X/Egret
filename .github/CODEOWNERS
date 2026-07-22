@@ -1,4 +1,4 @@
-# CODEOWNERS — auto-assign reviewers and enforce review on sensitive paths.
+# CODEOWNERS - auto-assign reviewers and enforce review on sensitive paths.
 # Combined with "Require review from Code Owners" in branch protection, this
 # forces the right eyes on changes to the listed areas.
 
@@ -10,7 +10,7 @@
 /.github/workflows/                 @NX1X
 /SECURITY.md                        @NX1X
 
-# Egress enforcer + network eBPF — requires a network-security review
+# Egress enforcer + network eBPF - requires a network-security review
 /internal/enforcer/                 @NX1X
 /internal/bpf/network.bpf.c         @NX1X
 /internal/bpf/                      @NX1X

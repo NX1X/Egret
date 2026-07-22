@@ -21,7 +21,7 @@ For non-security bugs and questions, open a public issue at
 Please include:
 
 - Affected version / commit (`egret version`) and mode (`audit` / `block`).
-- Kernel and distro (`uname -r`) — eBPF behavior is kernel-sensitive.
+- Kernel and distro (`uname -r`) - eBPF behavior is kernel-sensitive.
 - A minimal reproduction: policy snippet + the command being wrapped.
 - The impact you believe it has (e.g. "egress to a denied domain succeeds via
   DoH", "enforcer fails open on teardown").
@@ -30,12 +30,12 @@ Please include:
 
 High-value classes for Egret specifically:
 
-- **Egress-enforcement bypass** — reaching a denied destination in `block`
+- **Egress-enforcement bypass** - reaching a denied destination in `block`
   mode (DoH/DoT, raw IP, IPv6, QUIC, DNS rebinding, CDN IP rotation, etc.).
-  Some residual gaps are *known* (DoH/DoT, raw IP, QUIC, CDN IP rotation) — a
+  Some residual gaps are *known* (DoH/DoT, raw IP, QUIC, CDN IP rotation) - a
   report that matches a known limitation is still welcome but may already be
   tracked.
-- **Fail-open teardown** — the enforcer leaving traffic allowed after a crash
+- **Fail-open teardown** - the enforcer leaving traffic allowed after a crash
   or exit when it should fail closed.
 - **Privilege / capability misuse**, path traversal in report writing, or
   policy-parser issues that lead to code execution.

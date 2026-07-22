@@ -28,7 +28,7 @@ type firewall interface {
 	AllowIPs(domain string, ips []net.IP, ttlSeconds uint32) error
 	// BuildCgroupFD returns a cgroup-v2 directory fd the monitored command must be
 	// placed into (via SysProcAttr.UseCgroupFD) so the egress filter applies to
-	// the build — and NOT to Egret's own DNS-proxy upstream. -1 = no scoping
+	// the build - and NOT to Egret's own DNS-proxy upstream. -1 = no scoping
 	// (audit mode / no firewall).
 	BuildCgroupFD() int
 	// Teardown removes all rules/sets Egret installed, restoring the host.
@@ -39,7 +39,7 @@ type firewall interface {
 	// Empty when there is no firewall (audit mode).
 	ProbeCanary() string
 	// ProbeDropCount reports how many packets the cgroup-scoped canary drop rule
-	// has matched — the signal the self-probe reads to confirm the cgroup match works.
+	// has matched - the signal the self-probe reads to confirm the cgroup match works.
 	ProbeDropCount(ctx context.Context) (uint64, error)
 }
 

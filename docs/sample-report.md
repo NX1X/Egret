@@ -1,6 +1,6 @@
 # 🪶 Egret report
 
-> **Mockup** — an illustrative example of `report.md` (and the GitHub job
+> **Mockup** - an illustrative example of `report.md` (and the GitHub job
 > summary) produced by `egret run`. Generated reports will look like this; this
 > file is documentation, not test output.
 
