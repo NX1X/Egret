@@ -31,14 +31,9 @@ go.work.sum
 Thumbs.db
 *.swp
 
-# Local / machine-specific dev tooling & settings (not shared)
+# Local Claude Code + editor settings (never published)
 .claude/
 CLAUDE.md
-ORDERS.md
-scripts/build_lessons_index.py
-scripts/check_opsec_sync.py
-scripts/scaffold_template_harness.py
-scripts/show_session_state.sh
 .vscode/settings.local.json
 **/settings.local.json
 
