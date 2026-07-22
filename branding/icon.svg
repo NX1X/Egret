@@ -2,51 +2,29 @@
   <title>Egret</title>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#13293D"/>
-      <stop offset="1" stop-color="#0B1B2B"/>
+      <stop offset="0" stop-color="#13293D"/><stop offset="1" stop-color="#0B1B2B"/>
     </linearGradient>
-    <linearGradient id="egress" gradientUnits="userSpaceOnUse" x1="34" y1="205" x2="208" y2="205">
-      <stop offset="0" stop-color="#2DD4BF" stop-opacity="0.30"/>
-      <stop offset="0.4" stop-color="#2DD4BF"/>
-      <stop offset="1" stop-color="#2DD4BF"/>
+    <linearGradient id="egress" gradientUnits="userSpaceOnUse" x1="34" y1="214" x2="196" y2="214">
+      <stop offset="0" stop-color="#2DD4BF" stop-opacity="0.30"/><stop offset="0.45" stop-color="#2DD4BF"/><stop offset="1" stop-color="#2DD4BF"/>
     </linearGradient>
   </defs>
-
   <rect x="0" y="0" width="256" height="256" rx="56" fill="url(#bg)"/>
-
-  <!-- egress line the egret stands on, ending in an endpoint node -->
-  <line x1="34" y1="205" x2="208" y2="205" stroke="url(#egress)" stroke-width="10" stroke-linecap="round"/>
-  <circle cx="208" cy="205" r="9" fill="#2DD4BF"/>
-
-  <!-- legs -->
-  <g stroke="#F5F7FA" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M112 171 L106 205"/>
-    <path d="M126 173 L131 205"/>
-    <path d="M106 205 l11 3"/>
-    <path d="M131 205 l11 3"/>
+  <!-- egress line + endpoint node the egret flies toward -->
+  <line x1="34" y1="214" x2="196" y2="214" stroke="url(#egress)" stroke-width="9" stroke-linecap="round"/>
+  <circle cx="196" cy="214" r="8" fill="#2DD4BF"/>
+  <!-- legs trailing -->
+  <g stroke="#F5F7FA" stroke-width="5" stroke-linecap="round">
+    <path d="M104 160 L82 186"/>
+    <path d="M112 162 L94 190"/>
   </g>
-
-  <!-- long wispy breeding plumes (aigrettes) trailing off the back, past the tail -->
-  <g fill="none" stroke="#F5F7FA" stroke-linecap="round">
-    <path d="M122 127 C88 116 54 122 20 143" stroke-width="3" opacity="0.92"/>
-    <path d="M120 133 C86 125 52 134 22 155" stroke-width="2.6" opacity="0.82"/>
-    <path d="M116 140 C84 135 54 146 28 164" stroke-width="2.2" opacity="0.72"/>
-    <path d="M112 146 C84 143 58 154 34 170" stroke-width="1.9" opacity="0.6"/>
-  </g>
-
-  <!-- body silhouette: sleek, elongated, tapered tail -->
-  <path d="M44 150 C64 131 104 127 136 141 C150 148 150 162 138 170
-           C116 181 84 181 68 169 C56 160 46 155 44 150 Z" fill="#F5F7FA"/>
-
-  <!-- long thin S-neck with the signature egret kink -->
-  <path d="M138 143 C150 121 150 107 135 97 C123 89 128 69 148 57
-           C156 52 162 50 168 50"
-        fill="none" stroke="#F5F7FA" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/>
-
-  <!-- head -->
-  <circle cx="170" cy="49" r="9.5" fill="#F5F7FA"/>
-  <!-- fine head plume -->
-  <path d="M164 43 C154 33 146 32 137 35" fill="none" stroke="#F5F7FA" stroke-width="3.5" stroke-linecap="round" opacity="0.9"/>
-  <!-- long level dagger beak -->
-  <path d="M178 46 L216 48 L179 57 Z" fill="#F5B54B"/>
+  <!-- tail -->
+  <path d="M98 152 C84 155 72 156 62 154 C74 148 86 148 100 150 Z" fill="#F5F7FA"/>
+  <!-- body -->
+  <ellipse cx="118" cy="152" rx="27" ry="14" fill="#F5F7FA"/>
+  <!-- upswept wing -->
+  <path d="M120 146 C124 108 150 80 188 66 C172 100 152 126 140 150 C132 152 124 150 120 146 Z" fill="#F5F7FA"/>
+  <!-- neck + head + dagger beak -->
+  <path d="M138 150 C160 150 158 134 176 132" fill="none" stroke="#F5F7FA" stroke-width="12" stroke-linecap="round"/>
+  <circle cx="180" cy="131" r="10" fill="#F5F7FA"/>
+  <path d="M189 126 L222 130 L189 138 Z" fill="#F5B54B"/>
 </svg>

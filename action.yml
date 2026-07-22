@@ -2,9 +2,9 @@ name: "Egret Security"
 description: "eBPF runtime guard for CI jobs: monitor and enforce egress, process, and file behaviour, with SARIF to Code Scanning."
 branding:
   # GitHub Actions Marketplace allows only a Feather icon + a fixed color enum
-  # (no custom image / hex). "share-2" reads as the outbound network egress that
-  # the agent watches; green keeps the security/pass signal.
-  icon: "share-2"
+  # (no custom image / hex), so the egret art can't be used here. "feather" is the
+  # closest brand tie (the egret / plume); green keeps the security/pass signal.
+  icon: "feather"
   color: "green"
 
 inputs:

@@ -23,26 +23,18 @@
   <!-- icon mark -->
   <g transform="translate(150,190) scale(1.0)">
     <rect x="0" y="0" width="256" height="256" rx="56" fill="#0B1B2B" stroke="#1E3A52" stroke-width="2"/>
-    <line x1="36" y1="204" x2="214" y2="204" stroke="#2DD4BF" stroke-width="9" stroke-linecap="round"/>
-    <circle cx="214" cy="204" r="9" fill="#2DD4BF"/>
-    <g stroke="#F5F7FA" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M108 168 L103 204"/>
-      <path d="M122 170 L126 204"/>
-      <path d="M103 204 l11 3"/>
-      <path d="M126 204 l11 3"/>
+    <line x1="34" y1="214" x2="196" y2="214" stroke="#2DD4BF" stroke-width="9" stroke-linecap="round"/>
+    <circle cx="196" cy="214" r="8" fill="#2DD4BF"/>
+    <g stroke="#F5F7FA" stroke-width="5" stroke-linecap="round">
+      <path d="M104 160 L82 186"/>
+      <path d="M112 162 L94 190"/>
     </g>
-    <path d="M52 124 C78 112 118 116 138 132 C151 143 151 160 137 169
-             C120 180 92 180 78 167 C70 159 63 150 60 142 C58 137 54 130 52 124 Z"
-          fill="#F5F7FA"/>
-    <g fill="none" stroke="#F5F7FA" stroke-width="4" stroke-linecap="round" opacity="0.85">
-      <path d="M84 122 C64 112 48 111 34 116"/>
-      <path d="M92 129 C72 123 54 125 40 133"/>
-    </g>
-    <path d="M126 134 C118 110 146 110 140 90 C136 76 150 64 166 63"
-          fill="none" stroke="#F5F7FA" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
-    <circle cx="169" cy="61" r="11" fill="#F5F7FA"/>
-    <path d="M162 54 C150 42 138 40 126 43" fill="none" stroke="#F5F7FA" stroke-width="5" stroke-linecap="round"/>
-    <path d="M177 57 L213 54 L179 70 Z" fill="#F5B54B"/>
+    <path d="M98 152 C84 155 72 156 62 154 C74 148 86 148 100 150 Z" fill="#F5F7FA"/>
+    <ellipse cx="118" cy="152" rx="27" ry="14" fill="#F5F7FA"/>
+    <path d="M120 146 C124 108 150 80 188 66 C172 100 152 126 140 150 C132 152 124 150 120 146 Z" fill="#F5F7FA"/>
+    <path d="M138 150 C160 150 158 134 176 132" fill="none" stroke="#F5F7FA" stroke-width="12" stroke-linecap="round"/>
+    <circle cx="180" cy="131" r="10" fill="#F5F7FA"/>
+    <path d="M189 126 L222 130 L189 138 Z" fill="#F5B54B"/>
   </g>
 
   <!-- title block -->
@@ -51,18 +43,22 @@
   <text x="474" y="330" font-family="Inter,system-ui,sans-serif"
         font-size="34" font-weight="500" fill="#2DD4BF">Runtime egress security for CI/CD &amp; Linux hosts</text>
 
-  <!-- feature chips -->
+  <!-- feature chips (two rows) -->
   <g font-family="Inter,system-ui,sans-serif" font-size="24" font-weight="600" fill="#CBD5E1">
-    <rect x="474" y="372" width="230" height="52" rx="26" fill="#0B1B2B" stroke="#234"/>
-    <text x="500" y="405">eBPF egress filter</text>
-    <rect x="722" y="372" width="200" height="52" rx="26" fill="#0B1B2B" stroke="#234"/>
-    <text x="748" y="405">audit</text>
-    <path d="M818 398 h20 m-7 -6 l7 6 l-7 6" fill="none" stroke="#CBD5E1" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
-    <text x="850" y="405">policy</text>
-    <rect x="940" y="372" width="170" height="52" rx="26" fill="#0B1B2B" stroke="#234"/>
-    <text x="966" y="405">GitHub Action</text>
+    <!-- row 1: what it does -->
+    <rect x="474" y="360" width="250" height="52" rx="26" fill="#0B1B2B" stroke="#234"/>
+    <text x="500" y="393">eBPF egress filter</text>
+    <rect x="742" y="360" width="224" height="52" rx="26" fill="#0B1B2B" stroke="#234"/>
+    <text x="768" y="393">audit</text>
+    <path d="M838 386 h20 m-7 -6 l7 6 l-7 6" fill="none" stroke="#CBD5E1" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="866" y="393">policy</text>
+    <!-- row 2: how you run it -->
+    <rect x="474" y="424" width="224" height="52" rx="26" fill="#0B1B2B" stroke="#234"/>
+    <text x="500" y="457">GitHub Action</text>
+    <rect x="716" y="424" width="192" height="52" rx="26" fill="#0B1B2B" stroke="#234"/>
+    <text x="742" y="457">GitHub App</text>
   </g>
 
-  <text x="474" y="470" font-family="Inter,system-ui,sans-serif" font-size="22" fill="#7C93A8">
+  <text x="474" y="524" font-family="Inter,system-ui,sans-serif" font-size="22" fill="#7C93A8">
     No server · no account · no phone-home · Apache-2.0</text>
 </svg>
