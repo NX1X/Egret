@@ -52,11 +52,13 @@ jobs:
   # egret-security-app[bot]. Manual (workflow_dispatch) so it doesn't post on every push.
   app-token:
     name: App-token publish (egret-security-app[bot])
-    if: github.event_name == 'workflow_dispatch'
+    # Manual, or on a SAME-REPO pull request (fork PRs can't read the App secrets).
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       contents: read
+      security-events: write   # upload SARIF (the PR path exercises the full experience)
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
@@ -74,10 +76,66 @@ jobs:
         with:
           version: latest
           mode: audit
-          upload-sarif: "false"        # v0.1.0 binary SARIF bug; re-enable after v0.1.1
           github-token: ${{ steps.app-token.outputs.token }}
           check-run: true
+          pr-comment: true          # posts only on pull_request events (entrypoint guards)
           dashboard-issue: true
           command: |
             echo "app-token test build"
             curl -fsS https://example.com -o /dev/null
+
+  # Block mode: prove the enforcer actually confines egress on a real runner.
+  # Manual (workflow_dispatch) because block mode may not confine on hosted runners
+  # (the self-probe aborts fail-closed if it can't) - we want to see that outcome.
+  block:
+    name: Egret enforces block mode (disallowed egress blocked)
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Write a block policy allowing only example.com
+        run: |
+          cat > "${RUNNER_TEMP}/egret-policy.yaml" <<'YAML'
+          version: 1
+          mode: block
+          egress:
+            allowed-endpoints:
+              - example.com
+            block-raw-ip: true
+          YAML
+
+      - name: Run a build hitting an allowed + a disallowed endpoint
+        id: egret
+        continue-on-error: true   # we assert on the outcome ourselves
+        uses: ./
+        with:
+          version: latest
+          mode: block
+          policy: ${{ runner.temp }}/egret-policy.yaml
+          upload-sarif: "false"
+          command: |
+            echo "== allowed: example.com =="
+            curl -fsS --max-time 20 https://example.com -o /dev/null && echo "example.com OK"
+            echo "== disallowed: api.github.com =="
+            curl -fsS --max-time 20 https://api.github.com -o /dev/null \
+              && echo "::warning::reached api.github.com (NOT blocked)" \
+              || echo "api.github.com connection failed (expected under block mode)"
+
+      - name: Assert enforcement
+        run: |
+          echo "egret step outcome: ${{ steps.egret.outcome }}"
+          V="${{ steps.egret.outputs.violations }}"
+          echo "violations=${V:-<none>}  report-dir=${{ steps.egret.outputs.report-dir }}"
+          # Block mode should record >=1 violation for the disallowed api.github.com egress.
+          # If Egret's self-probe finds it can't confine this runner it aborts fail-closed
+          # (the action step fails) - this assertion surfaces that rather than hiding it.
+          if [ "${V:-0}" -ge 1 ]; then
+            echo "block-mode enforcement confirmed (${V} violation(s))."
+          else
+            echo "::error::no violations - block mode did not confine egress on this runner (hosted-runner limitation or self-probe abort)."
+            exit 1
+          fi
