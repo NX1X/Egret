@@ -1,4 +1,4 @@
-name: "Egret Security"
+name: "Egret Security Action"
 description: "eBPF runtime guard for CI jobs: monitor and enforce egress, process, and file behaviour, with SARIF to Code Scanning."
 branding:
   # GitHub Actions Marketplace allows only a Feather icon + a fixed color enum
