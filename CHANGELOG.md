@@ -3,6 +3,28 @@
 Notable changes to Egret, following [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.3] - Action rename + Code Scanning cleanup
+
+### Changed
+
+- **Renamed the Marketplace Action to "Egret Security Action"** (was "Egret
+  Security"), so the Action is distinguished from the Egret Security App by tool
+  type. Reference it unchanged as `NX1X/Egret@v0` or a pinned `@v0.1.3`.
+- **Dogfood: our own CI test suites now run under the Egret Action in audit
+  mode**, so CI monitors the egress/exec/file behaviour of the toolchain and
+  dependency code during the tests (audit never blocks the build).
+
+### Security
+
+- **Closed all CodeQL `go/incorrect-integer-conversion` findings** in the
+  block-mode credential path: build uid/gid are parsed as bounded 32-bit values
+  and carried as `uint32` end to end, with no unchecked `int` narrowing.
+- **Scoped the self-test App installation token to least privilege**
+  (checks / issues / pull-requests write, contents read) instead of the App's
+  blanket installation permissions (zizmor `github-app`).
+- **Removed step-output template injection** in the self-test enforcement
+  assertion by passing step outputs through `env` (zizmor `template-injection`).
+
 ## [0.1.2] - Brand refresh
 
 ### Changed
@@ -72,6 +94,7 @@ generation - shipped as a CLI and a GitHub Action, with no server and no phone-h
 - **Hardened by default:** no phone-home; egress/event records are metadata only
   (never payloads); block mode is fail-closed on teardown.
 
+[0.1.3]: https://github.com/NX1X/Egret/releases/tag/v0.1.3
 [0.1.2]: https://github.com/NX1X/Egret/releases/tag/v0.1.2
 [0.1.1]: https://github.com/NX1X/Egret/releases/tag/v0.1.1
 [0.1.0]: https://github.com/NX1X/Egret/releases/tag/v0.1.0
