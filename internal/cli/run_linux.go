@@ -230,26 +230,28 @@ func buildCredential() (*syscall.Credential, string) {
 			"Block mode refuses to run the build at Egret's privilege (it could flush " +
 			"nft / escape the cgroup). Use audit mode if you can't drop privileges."
 	}
-	return &syscall.Credential{Uid: uint32(uid), Gid: uint32(gid), NoSetGroups: true}, ""
+	return &syscall.Credential{Uid: uid, Gid: gid, NoSetGroups: true}, ""
 }
 
-// lookupUID parses a non-zero uid/gid from the named env vars.
-func lookupUID(uidVar, gidVar string) (uid, gid int, ok bool) {
+// lookupUID parses a non-zero uid/gid (each a valid 32-bit id) from the named env vars.
+func lookupUID(uidVar, gidVar string) (uid, gid uint32, ok bool) {
 	us, gs := os.Getenv(uidVar), os.Getenv(gidVar)
 	if us == "" {
 		return 0, 0, false
 	}
-	u, err := strconv.Atoi(us)
+	// ParseUint with bitSize 32 rejects negatives and anything above math.MaxUint32,
+	// so the value provably fits a uid_t - no unchecked int->uint32 narrowing.
+	u, err := strconv.ParseUint(us, 10, 32)
 	if err != nil || u == 0 {
 		return 0, 0, false
 	}
 	g := u // default gid to uid when unset
 	if gs != "" {
-		if parsed, err := strconv.Atoi(gs); err == nil {
+		if parsed, err := strconv.ParseUint(gs, 10, 32); err == nil {
 			g = parsed
 		}
 	}
-	return u, g, true
+	return uint32(u), uint32(g), true
 }
 
 func asExitError(err error, target **exec.ExitError) bool {

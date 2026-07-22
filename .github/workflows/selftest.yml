@@ -70,6 +70,12 @@ jobs:
         with:
           app-id: ${{ secrets.EGRET_APP_ID }}
           private-key: ${{ secrets.EGRET_APP_PRIVATE_KEY }}
+          # Least-privilege: request only what the publish features need, not the
+          # App's blanket installation permissions.
+          permission-checks: write
+          permission-issues: write
+          permission-pull-requests: write
+          permission-contents: read
 
       - name: Run Egret + publish results via the App token
         uses: ./
@@ -126,10 +132,14 @@ jobs:
               || echo "api.github.com connection failed (expected under block mode)"
 
       - name: Assert enforcement
+        env:
+          OUTCOME: ${{ steps.egret.outcome }}
+          VIOLATIONS: ${{ steps.egret.outputs.violations }}
+          REPORT_DIR: ${{ steps.egret.outputs.report-dir }}
         run: |
-          echo "egret step outcome: ${{ steps.egret.outcome }}"
-          V="${{ steps.egret.outputs.violations }}"
-          echo "violations=${V:-<none>}  report-dir=${{ steps.egret.outputs.report-dir }}"
+          echo "egret step outcome: ${OUTCOME}"
+          V="${VIOLATIONS}"
+          echo "violations=${V:-<none>}  report-dir=${REPORT_DIR}"
           # Block mode should record >=1 violation for the disallowed api.github.com egress.
           # If Egret's self-probe finds it can't confine this runner it aborts fail-closed
           # (the action step fails) - this assertion surfaces that rather than hiding it.
