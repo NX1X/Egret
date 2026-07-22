@@ -167,6 +167,41 @@ cmd_run() {
 
   echo "Egret: ${violations} policy violation(s); wrapped command exit=${rc}"
 
+  # App-token publishing: post the report to GitHub via the binary's own
+  # `egret github` subcommands, using the caller-supplied token (a GitHub App
+  # installation token for org-wide + branded identity, or GITHUB_TOKEN). Each is
+  # opt-in and SOFT-fails (a ::warning::, never a job failure) so a missing token
+  # permission can't break the caller's build. The token travels as an env var to
+  # each subcommand — never on a command line (invisible in ps / cmdline).
+  local want_publish="false"
+  if [[ "${EGRET_CHECK_RUN:-false}" == "true" || "${EGRET_PR_COMMENT:-false}" == "true" || "${EGRET_DASHBOARD_ISSUE:-false}" == "true" ]]; then
+    want_publish="true"
+  fi
+  if [[ "${want_publish}" == "true" && -f "${reportjson}" ]]; then
+    if [[ -z "${EGRET_GITHUB_TOKEN:-}" ]]; then
+      echo "::warning::check-run/pr-comment/dashboard-issue enabled but no github-token was provided; skipping GitHub publishing."
+    else
+      echo "::group::Egret GitHub publish"
+      if [[ "${EGRET_CHECK_RUN:-false}" == "true" ]]; then
+        GITHUB_TOKEN="${EGRET_GITHUB_TOKEN}" "${BIN}" github check --from "${reportjson}" \
+          || echo "::warning::egret github check failed (does the token have checks: write?)"
+      fi
+      if [[ "${EGRET_PR_COMMENT:-false}" == "true" ]]; then
+        if [[ "${GITHUB_REF:-}" == refs/pull/* ]]; then
+          GITHUB_TOKEN="${EGRET_GITHUB_TOKEN}" "${BIN}" github comment --from "${reportjson}" \
+            || echo "::warning::egret github comment failed (does the token have pull-requests: write?)"
+        else
+          echo "::notice::pr-comment enabled but this is not a pull_request event; skipping the comment."
+        fi
+      fi
+      if [[ "${EGRET_DASHBOARD_ISSUE:-false}" == "true" ]]; then
+        GITHUB_TOKEN="${EGRET_GITHUB_TOKEN}" "${BIN}" github dashboard --from "${reportjson}" \
+          || echo "::warning::egret github dashboard failed (does the token have issues: write?)"
+      fi
+      echo "::endgroup::"
+    fi
+  fi
+
   # Fail on violations if requested (even in audit mode); otherwise forward the
   # wrapped command's own exit code so the job reflects the build result.
   if [[ "${EGRET_FAIL_ON_VIOLATIONS:-false}" == "true" && "${violations}" -gt 0 ]]; then

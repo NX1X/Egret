@@ -60,6 +60,22 @@ inputs:
     description: "Bearer token for the ingest endpoint. Pass a GitHub Actions secret (never a literal) — it is sent as a request header, never placed on a command line. Ignored unless ingest-url is set."
     required: false
     default: ""
+  github-token:
+    description: "Token for the App-only publish features below (check-run, PR comment, dashboard issue). Pass a GitHub App installation token (via actions/create-github-app-token) for org-wide policy + branded 'egret[bot]' identity, or the built-in GITHUB_TOKEN for the default scope. Sent only as an Authorization header, never on a command line. Empty = no GitHub publishing."
+    required: false
+    default: ""
+  check-run:
+    description: "Publish a branded pass/fail check run summarizing the report. Requires github-token with checks: write."
+    required: false
+    default: "false"
+  pr-comment:
+    description: "Post/update a sticky comment with the report on the pull request (pull_request events only). Requires github-token with pull-requests: write."
+    required: false
+    default: "false"
+  dashboard-issue:
+    description: "Create/update the Egret Security Dashboard issue with the latest report. Requires github-token with issues: write."
+    required: false
+    default: "false"
 
 outputs:
   report-dir:
@@ -99,6 +115,10 @@ runs:
         EGRET_DISABLE_SUDO: ${{ inputs.disable-sudo }}
         EGRET_INGEST_URL: ${{ inputs.ingest-url }}
         EGRET_INGEST_TOKEN: ${{ inputs.ingest-token }}
+        EGRET_GITHUB_TOKEN: ${{ inputs.github-token }}
+        EGRET_CHECK_RUN: ${{ inputs.check-run }}
+        EGRET_PR_COMMENT: ${{ inputs.pr-comment }}
+        EGRET_DASHBOARD_ISSUE: ${{ inputs.dashboard-issue }}
       run: ${{ github.action_path }}/entrypoint.sh run
 
     # always() so the SARIF still uploads when the wrapped build fails or a
