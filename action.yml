@@ -1,5 +1,5 @@
 name: "Egret Security"
-description: "GitHub Action - run any CI job under Egret's eBPF runtime guard: monitor and enforce egress, process, and file behaviour, with SARIF to Code Scanning. Pairs with the Egret Security GitHub App for org-wide branded checks. Docs: egret.nx1xlab.dev"
+description: "eBPF runtime guard for CI jobs: monitor and enforce egress, process, and file behaviour, with SARIF to Code Scanning."
 branding:
   # GitHub Actions Marketplace allows only a Feather icon + a fixed color enum
   # (no custom image / hex). "share-2" reads as the outbound network egress that
