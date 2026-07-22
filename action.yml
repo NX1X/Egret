@@ -1,4 +1,4 @@
-name: "Egret Runtime Guard"
+name: "Egret Security"
 description: "Monitor and enforce runtime egress, process, and file behaviour of a CI job (eBPF, zero-infra), with a SARIF upload to Code Scanning."
 branding:
   # GitHub Actions Marketplace allows only a Feather icon + a fixed color enum
