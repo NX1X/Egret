@@ -114,17 +114,30 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # Release notes come from the matching CHANGELOG.md section (curated, per
+          # "Keep a Changelog"); fall back to auto-generated notes if this version has
+          # no section yet. Keep CHANGELOG.md updated per release for rich release notes.
+          VER="${TAG#v}"
+          NOTES="${RUNNER_TEMP}/release-notes.md"
+          awk -v ver="${VER}" '
+            $0 ~ ("^## \\[" ver "\\]") { g=1; print; next }
+            g && (/^## \[/ || /^\[[0-9]/) { exit }
+            g { print }
+          ' CHANGELOG.md > "${NOTES}" || true
+          notes_args=(--generate-notes)
+          [ -s "${NOTES}" ] && notes_args=(--notes-file "${NOTES}")
           # Idempotent so a manual re-run of an existing tag republishes cleanly:
-          # if the Release already exists, re-upload assets (--clobber); else create it.
+          # refresh notes (when a section exists) + re-upload assets (--clobber).
           if gh release view "${TAG}" >/dev/null 2>&1; then
-            echo "Release ${TAG} already exists - re-uploading assets (--clobber)."
+            echo "Release ${TAG} already exists - updating notes + re-uploading assets."
+            [ -s "${NOTES}" ] && gh release edit "${TAG}" --notes-file "${NOTES}"
             gh release upload "${TAG}" \
               egret_linux_amd64 SHA256SUMS SHA256SUMS.bundle --clobber
           else
             gh release create "${TAG}" \
               egret_linux_amd64 SHA256SUMS SHA256SUMS.bundle \
               --title "${TAG}" \
-              --generate-notes \
+              "${notes_args[@]}" \
               --verify-tag
           fi
 
