@@ -50,10 +50,9 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **The Action installer verifies the release cosign signature.** When `cosign`
   is present, `SHA256SUMS.bundle` is verified (fail closed) before trusting the
   checksum; a new `require-signature` input makes its absence a hard failure.
-- **CI/CD hardening:** `harden-runner` (audit) on the release + app-token jobs,
-  `concurrency` + per-job `timeout-minutes` across CI/Security workflows, zizmor
-  tool-failure no longer hidden behind `|| true`, and `action.yml` uses
-  `$GITHUB_ACTION_PATH` instead of interpolating `github.action_path` into `run:`.
+- **CI/CD hardening:** `concurrency` + per-job `timeout-minutes` across CI/Security
+  workflows, zizmor tool-failure no longer hidden behind `|| true`, and `action.yml`
+  uses `$GITHUB_ACTION_PATH` instead of interpolating `github.action_path` into `run:`.
 
 ### Documentation
 

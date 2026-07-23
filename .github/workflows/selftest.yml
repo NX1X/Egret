@@ -60,13 +60,6 @@ jobs:
       contents: read
       security-events: write   # upload SARIF (the PR path exercises the full experience)
     steps:
-      # This job mints an Egret App installation token from the App private key.
-      # Monitor egress (audit) so a compromised dependency can't quietly exfiltrate
-      # the minted token or the key material during the run.
-      - name: Harden the runner
-        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
-        with:
-          egress-policy: audit
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
