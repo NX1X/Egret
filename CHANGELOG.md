@@ -22,8 +22,13 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   symlink-through bypasses. (Relative-path writes remain best-effort pending
   capture-time cwd resolution - documented in SECURITY.md.)
 - **`extends:` is confined to the policy directory.** A local `extends` ref can
-  no longer escape its base directory via `..` or an absolute path, so a crafted
-  policy can't pull an arbitrary local file in as its base.
+  no longer escape its base directory via `..`, an absolute path, or a **symlink**
+  (containment is enforced on the symlink-resolved real path), so a crafted policy
+  can't pull an arbitrary local file in as its base - which on a root-privileged
+  runner would be an arbitrary file read.
+- **The report directory can't be a symlink.** Egret refuses to write reports
+  through a symlinked `output-dir`, so the monitored build can't swap the report
+  directory for a symlink to an attacker-chosen location right before exiting.
 - **Policy files are strict-decoded.** An unknown or misspelled key (e.g.
   `allow-endpoints`) now fails fast instead of silently disabling the intended
   rule.

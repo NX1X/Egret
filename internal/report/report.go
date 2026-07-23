@@ -18,6 +18,14 @@ import (
 
 // Write emits the configured report formats for the session.
 func Write(s *event.Session, pol *policy.Policy) error {
+	// Refuse a symlinked report directory. The monitored build can write to the
+	// default (relative) OutputDir, so it could swap it for a symlink to an
+	// attacker-chosen directory right before exiting and redirect Egret's
+	// (root-privileged) report writes there. Reject the symlink rather than
+	// transparently following it.
+	if fi, err := os.Lstat(pol.Report.OutputDir); err == nil && fi.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("report dir %q is a symlink; refusing to write through it", pol.Report.OutputDir)
+	}
 	if err := os.MkdirAll(pol.Report.OutputDir, 0o755); err != nil {
 		return fmt.Errorf("creating report dir: %w", err)
 	}

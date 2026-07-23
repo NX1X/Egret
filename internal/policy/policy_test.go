@@ -383,6 +383,31 @@ func TestExtendsRejectsTraversalOutsideBaseDir(t *testing.T) {
 	}
 }
 
+func TestExtendsRejectsSymlinkEscape(t *testing.T) {
+	// A symlink placed INSIDE the policy directory that points OUTSIDE it must not
+	// defeat extends confinement (it would be a root-privileged arbitrary file read
+	// via a PR-controlled policy).
+	outside := t.TempDir()
+	secret := filepath.Join(outside, "secret.yaml")
+	os.WriteFile(secret, []byte("version: 1\nmode: block\negress:\n  allowed-endpoints: [attacker-marker.example]\n"), 0o644)
+
+	policyDir := t.TempDir()
+	link := filepath.Join(policyDir, "evil-link")
+	if err := os.Symlink(secret, link); err != nil {
+		t.Skipf("symlink unsupported: %v", err)
+	}
+	child := filepath.Join(policyDir, "child.yaml")
+	os.WriteFile(child, []byte("version: 1\nextends: evil-link\nmode: audit\n"), 0o644)
+
+	p, err := Load(child)
+	if err == nil {
+		if p.AllowsDomain("attacker-marker.example") {
+			t.Fatal("symlink extends escaped confinement: outside file was loaded as base")
+		}
+		t.Fatal("symlink extends should be rejected")
+	}
+}
+
 func TestUnknownPolicyFieldRejected(t *testing.T) {
 	dir := t.TempDir()
 	// `allow-endpoints` is a typo for `allowed-endpoints`; strict decoding must

@@ -166,33 +166,52 @@ func parsePolicy(raw []byte, baseDir string, resolve Resolver, depth int) (*Poli
 // resolve any nested relative extends within it.
 //
 // A local `extends` is confined to baseDir (the directory of the policy that
-// declared it): both absolute paths and "../" traversal that escape baseDir are
-// rejected. policy.yaml is frequently the artifact an untrusted PR edits, so an
-// unconfined `extends: ../../../../etc/somefile` would let a crafted policy pull
-// an arbitrary local file in as its base. Confinement keeps the base policy
-// inside the repo checkout the policy itself lives in.
+// declared it): absolute paths, "../" traversal, AND symlinks that escape baseDir
+// are rejected. policy.yaml is frequently the artifact an untrusted PR edits, so
+// an unconfined `extends: ../../../../etc/somefile` - or an `extends: link` where
+// `link` is a symlink inside baseDir pointing outside it - would let a crafted
+// policy pull an arbitrary local file in as its base (a root-privileged file read
+// on the runner). Confinement is enforced on the SYMLINK-RESOLVED real paths, not
+// just lexically, so a symlink can't smuggle the base policy out of the checkout.
 func resolveRef(ref, baseDir string, resolve Resolver) ([]byte, string, error) {
 	if !strings.Contains(ref, "://") { // local file, possibly relative
 		if filepath.IsAbs(ref) {
 			return nil, "", fmt.Errorf("extends %q: absolute paths are not allowed; use a path relative to the policy file", ref)
 		}
 		p := filepath.Join(baseDir, ref)
-		root, rerr := filepath.Abs(baseDir)
-		abs, aerr := filepath.Abs(p)
+		// Resolve symlinks on BOTH the base directory and the target before the
+		// containment check. EvalSymlinks requires the path to exist; the extends
+		// target must exist to be read, so a resolution failure here (missing file
+		// or broken/danging symlink) is surfaced as an error rather than falling
+		// back to an unconfined read.
+		root, rerr := absEvalSymlinks(baseDir)
+		abs, aerr := absEvalSymlinks(p)
 		if rerr != nil || aerr != nil {
 			return nil, "", fmt.Errorf("extends %q: resolving path: %w", ref, errors.Join(rerr, aerr))
 		}
 		if abs != root && !strings.HasPrefix(abs, root+string(os.PathSeparator)) {
 			return nil, "", fmt.Errorf("extends %q: path escapes the policy directory (%s)", ref, baseDir)
 		}
-		b, err := os.ReadFile(p)
-		return b, filepath.Dir(p), err
+		// Read the resolved real path (which we've proven stays inside baseDir).
+		b, err := os.ReadFile(abs)
+		return b, filepath.Dir(abs), err
 	}
 	if resolve == nil {
 		return nil, "", fmt.Errorf("cannot resolve remote extends %q (no resolver configured)", ref)
 	}
 	b, err := resolve(ref)
 	return b, baseDir, err
+}
+
+// absEvalSymlinks returns the absolute, fully symlink-resolved real path. It is
+// used to enforce `extends` containment on real paths so a symlink can't escape
+// the policy directory. Requires the path to exist.
+func absEvalSymlinks(p string) (string, error) {
+	real, err := filepath.EvalSymlinks(p)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Abs(real)
 }
 
 // unionDedup concatenates lists preserving order, dropping duplicates and empties.
