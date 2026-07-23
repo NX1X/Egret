@@ -207,6 +207,16 @@ func (f *nftFirewall) Teardown() error {
 	return firstErr
 }
 
+// KillBuild reaps the build cgroup without tearing down the egress rules, so it
+// can be called after the monitored command exits and before the report is
+// written. Teardown calls the same reaper again (idempotent once the cgroup is
+// empty).
+func (f *nftFirewall) KillBuild() {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.cg.Kill()
+}
+
 // runNft feeds a script to `nft -f -`.
 func (f *nftFirewall) runNft(ctx context.Context, script string) error {
 	cmd := exec.CommandContext(ctx, "nft", "-f", "-")

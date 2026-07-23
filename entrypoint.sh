@@ -17,6 +17,10 @@ REPO="NX1X/Egret"
 INSTALL_DIR="${RUNNER_TEMP:-/tmp}/egret"
 BIN="${INSTALL_DIR}/egret"
 ASSET="egret_linux_amd64"
+# The keyless cosign signing identity for a release (Fulcio cert subject +
+# OIDC issuer). Used to verify SHA256SUMS.bundle. Kept in sync with release.yml.
+COSIGN_IDENTITY_RE='^https://github.com/NX1X/Egret/\.github/workflows/release\.yml@.*'
+COSIGN_OIDC_ISSUER='https://token.actions.githubusercontent.com'
 
 # parse_tag_name reads a releases JSON blob on stdin and prints tag_name. Portable
 # (sed, not grep -P) so it works regardless of the runner's grep flavour.
@@ -24,9 +28,49 @@ parse_tag_name() {
   sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1
 }
 
-# verify_checksum <tag> - download the release SHA256SUMS and verify BIN against
-# it. Fail closed: the binary runs as root, so an unverifiable download must not
-# proceed (pinning a version is not enough on its own without hash verification).
+# verify_signature <tag> <sums> - verify the release SHA256SUMS against its
+# keyless cosign signature (SHA256SUMS.bundle). A checksum served from the same
+# origin as the binary only catches corruption, not a compromised release; the
+# Sigstore signature is what ties SHA256SUMS to this repo's release workflow
+# identity. Behaviour:
+#   - cosign present + bundle verifies      -> pass
+#   - cosign present + bundle FAILS/absent  -> fail closed (tampering signal)
+#   - cosign absent, EGRET_REQUIRE_SIGNATURE=true -> fail closed (strict opt-in)
+#   - cosign absent, default                -> warn, fall back to checksum-only
+#     (GitHub-hosted runners don't ship cosign; don't break the default install)
+verify_signature() {
+  local tag="$1" sums="$2"
+  local bundle="${INSTALL_DIR}/SHA256SUMS.bundle"
+  local url="https://github.com/${REPO}/releases/download/${tag}/SHA256SUMS.bundle"
+
+  if ! command -v cosign >/dev/null 2>&1; then
+    if [[ "${EGRET_REQUIRE_SIGNATURE:-false}" == "true" ]]; then
+      echo "::error::require-signature is set but cosign is not installed; refusing to run an unverified binary as root. Add a cosign install step (e.g. sigstore/cosign-installer) before this action."
+      return 1
+    fi
+    echo "::warning::cosign not found; falling back to checksum-only verification. Install cosign (or set require-signature) to verify the release signature, which a same-origin checksum can't provide."
+    return 0
+  fi
+
+  if ! curl -fsSL -o "${bundle}" "${url}"; then
+    echo "::error::cosign is available but no SHA256SUMS.bundle was published for ${tag}; refusing to run (a signed release is expected)."
+    return 1
+  fi
+  if ! cosign verify-blob \
+        --bundle "${bundle}" \
+        --certificate-identity-regexp "${COSIGN_IDENTITY_RE}" \
+        --certificate-oidc-issuer "${COSIGN_OIDC_ISSUER}" \
+        "${sums}" >/dev/null 2>&1; then
+    echo "::error::cosign signature verification failed for SHA256SUMS (${tag}); refusing to run a binary whose release signature does not match ${REPO}'s release workflow identity."
+    return 1
+  fi
+  echo "Verified SHA256SUMS signature with cosign (identity ${COSIGN_IDENTITY_RE}, issuer ${COSIGN_OIDC_ISSUER})."
+}
+
+# verify_checksum <tag> - download the release SHA256SUMS, verify its cosign
+# signature (see verify_signature), then verify BIN against it. Fail closed: the
+# binary runs as root, so an unverifiable download must not proceed (pinning a
+# version is not enough on its own without hash + signature verification).
 verify_checksum() {
   local tag="$1"
   local sums="${INSTALL_DIR}/SHA256SUMS"
@@ -35,6 +79,8 @@ verify_checksum() {
     echo "::error::No SHA256SUMS published for ${tag}; refusing to run an unverified binary as root."
     return 1
   fi
+  # Verify the signature over SHA256SUMS BEFORE trusting any digest it lists.
+  verify_signature "${tag}" "${sums}" || return 1
   # Hash-compare directly: the asset is saved as ${BIN} (…/egret), not "${ASSET}",
   # so `sha256sum -c` on the SHA256SUMS line (which names the file "${ASSET}") would
   # look for the wrong on-disk name and fail. Compare the digests instead.

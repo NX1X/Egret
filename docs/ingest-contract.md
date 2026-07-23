@@ -23,7 +23,7 @@ Source of truth: `internal/ingest` in `Egret`. Wire format: JSON.
 {
   "schema_version": 1,
   "producer": "egret",
-  "producer_version": "v0.1.0",
+  "producer_version": "v0.2.0",
   "generated_at": "2026-07-02T10:00:00Z",
   "run": {
     "provider": "github-actions",

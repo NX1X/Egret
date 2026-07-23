@@ -8,12 +8,19 @@ on:
 permissions:
   contents: read
 
+# Cancel superseded runs on the same ref so a rapid push series to a PR can't
+# pile up parallel runners.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   # Cross-platform packages + the non-Linux build paths (run_other, the
   # collector/enforcer stubs). Building for a non-Linux target excludes every
   # //go:build linux file, so this needs no eBPF codegen or kernel.
   unit:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
@@ -53,6 +60,7 @@ jobs:
   # kernel ships no matching bpftool to dump the CO-RE vmlinux.h).
   ebpf:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:

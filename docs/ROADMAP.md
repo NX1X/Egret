@@ -55,7 +55,7 @@ probes need Linux.
 audit→allowlist-PR loop, and `extends: org://…` all work with a plain `GITHUB_TOKEN`
 or an App token.
 
-**Egret Nest dashboard (Tier 3)** - at **v0.1.0**, feature-complete and
+**Egret Nest dashboard (Tier 3)** - at **v0.1.1**, feature-complete and
 security-reviewed: run ingest + SQLite storage, per-repo egress-over-time, new-endpoint
 drift, org fleet view, and enterprise auth (GitHub OAuth / OIDC / local + TOTP),
 org→repo→run RBAC, scoped ingest tokens, audit log, TLS. Configurable via env or an
@@ -76,18 +76,18 @@ remaining work is on the agent:
 - **Kernel coverage** - verify the eBPF probes across ≥2 kernel versions.
 - **Whole-job tracing** - trace every step transparently, without wrapping a
   `command`.
-- **Release polish** - App-Manifest one-click install, Marketplace listing, arm64
-  builds.
+- **Release polish** - App-Manifest one-click install, arm64 builds.
 
-Until the agent hits its v1.0 bar, it is **not tagged**; the dashboard is already at
-`v0.1.0`.
+The agent ships tagged pre-1.0 releases (currently **`v0.1.3`**, on the Marketplace as
+"Egret Security Action") on the road to v1.0; the dashboard is at **`v0.1.1`**. `v1.0.0`
+is the combined product gate.
 
 ## Beyond v1.0
 
 - **Deeper egress coverage** - UDP/DoH/DoT/QUIC and CDN/SNI-fronting cases that
   connect()-based probes don't see.
-- **Per-step attribution**, a bundled versioned block-list, and **dogfooding** (Egret
-  guarding its own CI).
+- **Per-step attribution** and a bundled versioned block-list. (Dogfooding - Egret
+  guarding its own CI in audit mode - shipped in v0.1.3.)
 - Deliberately **out of the core** (dashboard-tier or never): cross-run anomaly
   detection, web analytics, and any live phone-home threat feed - the zero-infra,
   no-phone-home promise is permanent.

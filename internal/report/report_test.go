@@ -136,3 +136,20 @@ func TestMdEscape(t *testing.T) {
 		t.Errorf("mdEscape = %q", got)
 	}
 }
+
+func TestMdEscapeNeutralizesNewlines(t *testing.T) {
+	// A hostile filename injecting a fake table row/header must not survive with
+	// real newlines - otherwise it forges rows in the report reviewers trust.
+	in := "evil\n\n## ✅ No violations\n| a | b |"
+	got := mdEscape(in)
+	if strings.ContainsAny(got, "\n\r") {
+		t.Errorf("mdEscape left a raw newline in %q", got)
+	}
+}
+
+func TestMdEscapeCapsLength(t *testing.T) {
+	got := mdEscape(strings.Repeat("x", mdEscapeMaxLen+100))
+	if len([]rune(got)) > mdEscapeMaxLen+1 { // +1 for the ellipsis
+		t.Errorf("mdEscape did not cap length: got %d runes", len([]rune(got)))
+	}
+}

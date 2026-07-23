@@ -48,6 +48,15 @@ jobs:
     env:
       TAG: ${{ inputs.tag || github.ref_name }}
     steps:
+      # Egress monitoring on the trust path: this job holds the release/signing
+      # identity and builds third-party toolchain + module code, so a compromised
+      # dependency exfiltrating to an unexpected host must be visible. Audit mode
+      # records the network baseline without blocking; switch to a block policy
+      # once the baseline is confirmed.
+      - name: Harden the runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: audit
       # Don't persist the ambient GITHUB_TOKEN into .git/config: nothing here does
       # git-level writes (the release step uses its own GH_TOKEN), and the build
       # runs third-party toolchain/module code that must not see push credentials.

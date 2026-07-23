@@ -108,7 +108,13 @@ func (p *DNSProxy) DomainForIP(ip net.IP) string {
 
 // handle processes one DNS query.
 func (p *DNSProxy) handle(w dns.ResponseWriter, req *dns.Msg) {
-	if len(req.Question) == 0 {
+	// Real resolvers send exactly one question per packet (QDCOUNT==1). Refuse
+	// anything else: a multi-question query could carry an allowlisted name in
+	// Question[0] to pass the block-mode check below while a denied name rides
+	// along in Question[1..] and still gets forwarded to (and answered by)
+	// upstream. Only the first question is ever inspected, so reject the rest
+	// outright rather than resolve names that were never checked.
+	if len(req.Question) != 1 {
 		p.refuse(w, req)
 		return
 	}

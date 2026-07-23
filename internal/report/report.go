@@ -18,6 +18,14 @@ import (
 
 // Write emits the configured report formats for the session.
 func Write(s *event.Session, pol *policy.Policy) error {
+	// Refuse a symlinked report directory. The monitored build can write to the
+	// default (relative) OutputDir, so it could swap it for a symlink to an
+	// attacker-chosen directory right before exiting and redirect Egret's
+	// (root-privileged) report writes there. Reject the symlink rather than
+	// transparently following it.
+	if fi, err := os.Lstat(pol.Report.OutputDir); err == nil && fi.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("report dir %q is a symlink; refusing to write through it", pol.Report.OutputDir)
+	}
 	if err := os.MkdirAll(pol.Report.OutputDir, 0o755); err != nil {
 		return fmt.Errorf("creating report dir: %w", err)
 	}
@@ -33,7 +41,7 @@ func Write(s *event.Session, pol *policy.Policy) error {
 			return fmt.Errorf("marshalling json report: %w", err)
 		}
 		path := filepath.Join(pol.Report.OutputDir, "report.json")
-		if err := os.WriteFile(path, append(b, '\n'), 0o644); err != nil {
+		if err := writeFileAtomic(path, append(b, '\n'), 0o644); err != nil {
 			return fmt.Errorf("writing json report: %w", err)
 		}
 	}
@@ -41,7 +49,7 @@ func Write(s *event.Session, pol *policy.Policy) error {
 	if formats["markdown"] {
 		md := Markdown(s)
 		path := filepath.Join(pol.Report.OutputDir, "report.md")
-		if err := os.WriteFile(path, []byte(md), 0o644); err != nil {
+		if err := writeFileAtomic(path, []byte(md), 0o644); err != nil {
 			return fmt.Errorf("writing markdown report: %w", err)
 		}
 		if pol.Report.GitHubJobSummary {
@@ -57,11 +65,46 @@ func Write(s *event.Session, pol *policy.Policy) error {
 			return fmt.Errorf("marshalling sarif report: %w", err)
 		}
 		path := filepath.Join(pol.Report.OutputDir, "report.sarif")
-		if err := os.WriteFile(path, append(b, '\n'), 0o644); err != nil {
+		if err := writeFileAtomic(path, append(b, '\n'), 0o644); err != nil {
 			return fmt.Errorf("writing sarif report: %w", err)
 		}
 	}
 	return nil
+}
+
+// writeFileAtomic writes data to a fresh temp file in the target directory and
+// renames it into place, so a reader (or a racing writer inside the monitored
+// build) can never observe a half-written or externally-overwritten report:
+// the final report.json/sarif is whatever Egret rename()d last, and rename is
+// atomic on POSIX. This closes the report-tampering race where a detached
+// process left running by the build kept overwriting the report file after
+// Egret's own (previously non-atomic) write.
+func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, ".egret-report-*")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	// Best-effort cleanup if we bail before the rename succeeds.
+	defer func() { _ = os.Remove(tmpName) }()
+
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Chmod(perm); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmpName, path)
 }
 
 // appendJobSummary appends md to $GITHUB_STEP_SUMMARY when present (no-op off CI).
@@ -170,9 +213,28 @@ func checkbox(b bool) string {
 	return "-"
 }
 
-// mdEscape neutralises pipe and backtick so table cells don't break.
+// mdEscapeMaxLen caps a single table cell so an attacker-controlled field
+// (e.g. a hostile filename captured from the monitored build) can't bloat the
+// report or the job summary.
+const mdEscapeMaxLen = 512
+
+// mdEscape neutralises characters that would let an attacker-controlled string
+// (a filename, comm, or destination captured from the untrusted build) break
+// out of a Markdown table cell. Beyond pipe and backtick it must also strip
+// CR/LF: Linux filenames may contain any byte except NUL and '/', so a value
+// like "evil\n\n## ✅ No violations\n| ... |" would otherwise inject new
+// rows/headers into the very report reviewers trust. Newlines and tabs collapse
+// to a visible marker instead of a real line break.
 func mdEscape(s string) string {
-	s = strings.ReplaceAll(s, "|", "\\|")
-	s = strings.ReplaceAll(s, "`", "'")
-	return s
+	if len(s) > mdEscapeMaxLen {
+		s = s[:mdEscapeMaxLen] + "…"
+	}
+	replacer := strings.NewReplacer(
+		"|", "\\|",
+		"`", "'",
+		"\r", "␍", // ␍
+		"\n", "␊", // ␊
+		"\t", " ",
+	)
+	return replacer.Replace(s)
 }

@@ -44,7 +44,14 @@
 
   "prConcurrentLimit": 5,
   "prHourlyLimit": 2,
-  "prCreation": "not-pending",
+  // Open the PR as soon as the branch is created. "not-pending" holds the PR
+  // until the branch's status checks are non-pending, but this repo's CI only
+  // runs on pushes to main and on pull_request events - it never runs on a
+  // renovate/* branch - so "not-pending" left every update stuck with branches
+  // created but no PR ever opened. With "immediate", checks run on the PR (where
+  // they're reviewed) and the 14-day cooldown is still enforced by
+  // minimumReleaseAge + internalChecksFilter: strict.
+  "prCreation": "immediate",
   "rangeStrategy": "bump",
   "separateMultipleMajor": true,
 
