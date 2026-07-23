@@ -3,7 +3,20 @@
 Notable changes to Egret, following [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - Pentest hardening
+## [0.2.0] - Security hardening (pentest remediation)
+
+### Changed (upgrade impact)
+
+- **A policy file with an unknown or misspelled key now fails to load** instead of
+  silently ignoring it. If you were relying on a key that was quietly dropped
+  (e.g. a typo'd `allow-endpoints`), the run now errors until you correct it -
+  this is intentional: a silently-ignored key meant the rule was never in effect.
+- **The Action installer verifies the release signature when `cosign` is present.**
+  On a runner that already has cosign, a release whose `SHA256SUMS.bundle`
+  signature doesn't verify is now rejected (fail closed). The new
+  `require-signature` input additionally makes cosign's absence a hard failure.
+- **The report directory may no longer be a symlink**, and a local `extends:` ref
+  may no longer resolve (via symlink or `..`) outside the policy directory.
 
 ### Security
 
