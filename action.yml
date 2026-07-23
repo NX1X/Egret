@@ -44,6 +44,10 @@ inputs:
     description: "If no verified release is available, build Egret from source (UNPINNED, unverified). Off by default."
     required: false
     default: "false"
+  require-signature:
+    description: "Require a valid keyless cosign signature (SHA256SUMS.bundle) on the release before running. Needs cosign on the runner (add sigstore/cosign-installer first). When cosign is present the signature is always verified; this makes its ABSENCE a hard failure instead of a checksum-only fallback."
+    required: false
+    default: "false"
   allow-pull-request-target:
     description: "Permit running under pull_request_target (Egret runs your command as ROOT - only enable if you do NOT check out the PR head)."
     required: false
@@ -96,7 +100,11 @@ runs:
       env:
         EGRET_VERSION: ${{ inputs.version }}
         EGRET_ALLOW_BUILD_FROM_SOURCE: ${{ inputs.allow-build-from-source }}
-      run: ${{ github.action_path }}/entrypoint.sh install
+        EGRET_REQUIRE_SIGNATURE: ${{ inputs.require-signature }}
+      # Use the GITHUB_ACTION_PATH env var rather than interpolating
+      # ${{ github.action_path }} into the run: script, matching the "inputs via
+      # env, never into run:" discipline used by the run step below.
+      run: "$GITHUB_ACTION_PATH/entrypoint.sh install"
 
     # Inputs are passed via env (never interpolated into the run: script) so a
     # crafted input can't inject shell - the classic Actions script-injection.
@@ -119,7 +127,7 @@ runs:
         EGRET_CHECK_RUN: ${{ inputs.check-run }}
         EGRET_PR_COMMENT: ${{ inputs.pr-comment }}
         EGRET_DASHBOARD_ISSUE: ${{ inputs.dashboard-issue }}
-      run: ${{ github.action_path }}/entrypoint.sh run
+      run: "$GITHUB_ACTION_PATH/entrypoint.sh run"
 
     # always() so the SARIF still uploads when the wrapped build fails or a
     # block-mode violation trips the run step - exactly when the signal matters.

@@ -84,6 +84,22 @@ func TestHandleEmptyQuestion(t *testing.T) {
 	}
 }
 
+func TestHandleRefusesMultiQuestion(t *testing.T) {
+	// A packet carrying more than one question is non-standard and could smuggle a
+	// denied name past the Question[0]-only allowlist check; refuse it outright.
+	p := NewDNSProxy(policy.Default(), nil)
+	w := &captureWriter{}
+	req := new(dns.Msg)
+	req.Question = []dns.Question{
+		{Name: "allowed.example.com.", Qtype: dns.TypeA, Qclass: dns.ClassINET},
+		{Name: "evil.example.com.", Qtype: dns.TypeA, Qclass: dns.ClassINET},
+	}
+	p.handle(w, req)
+	if w.msg == nil || w.msg.Rcode != dns.RcodeRefused {
+		t.Errorf("multi-question query should be refused, got %+v", w.msg)
+	}
+}
+
 func TestNoopFirewallAndDomainForIP(t *testing.T) {
 	// Audit-mode enforcer uses the noop firewall and still correlates domains.
 	e, err := New(policy.Default())

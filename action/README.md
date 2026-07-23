@@ -18,7 +18,9 @@ jobs:
       security-events: write    # required to upload SARIF to Code Scanning
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: NX1X/Egret@v0.1.0
+      # Pin to a full commit SHA for immutability (recommended); @v0.1.0 / @v0 are
+      # the floating convenience alternatives.
+      - uses: NX1X/Egret@95d7c293cd828369222aa5aec03952a1379e7fe6 # v0.1.3
         with:
           policy: .github/egret-policy.yaml
           mode: audit                # observe + report (default)
@@ -69,6 +71,7 @@ install the binary and call `egret run` yourself.
 | `fail-on-violations` | `false` | Fail the job if Egret records any policy violation. |
 | `output-dir` | `$RUNNER_TEMP/egret/report` | Where reports are written. |
 | `allow-build-from-source` | `false` | If no **verified** release is available, build from source (unpinned). Off = fail closed. |
+| `require-signature` | `false` | Require a valid keyless cosign signature (`SHA256SUMS.bundle`) on the release. Needs `cosign` on the runner (add `sigstore/cosign-installer` first). When cosign is present the signature is always verified; this makes its absence a hard failure instead of checksum-only. |
 | `allow-pull-request-target` | `false` | Permit running under `pull_request_target` (root + secrets - see warning above). |
 
 Installed release binaries are **checksum-verified** against the release's

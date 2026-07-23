@@ -87,13 +87,22 @@ jobs:
       security-events: write     # required to upload SARIF to Code Scanning
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: NX1X/Egret@v0        # floating major; or pin @v0.1.0 / a commit SHA for immutability
+      # Pin to a full commit SHA for immutability (recommended). The floating
+      # @v0 / @v0.1.0 tags are the convenience alternative.
+      - uses: NX1X/Egret@95d7c293cd828369222aa5aec03952a1379e7fe6 # v0.1.3
         with:
           policy: .github/egret-policy.yaml
           mode: audit                 # or: block
           command: make ci            # your whole build - monitored end-to-end
           fail-on-violations: true    # optional: fail the job on any violation
 ```
+
+> **Untrusted PRs:** on a plain `pull_request` run the checked-out
+> `policy: .github/egret-policy.yaml` comes from the PR head, so a PR can weaken
+> the policy that judges it. To keep the policy trusted, load it from the base
+> branch and/or protect the path with CODEOWNERS + branch protection. See
+> [SECURITY.md](SECURITY.md#trust-boundaries-and-known-limitations) for the
+> base-branch recipe.
 
 Findings then appear under the repo's **Security → Code scanning** tab. Omit
 `command` to only install the binary and call `egret run` yourself around

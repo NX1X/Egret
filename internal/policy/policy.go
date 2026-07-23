@@ -4,7 +4,10 @@
 package policy
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -118,6 +121,8 @@ func parsePolicy(raw []byte, baseDir string, resolve Resolver, depth int) (*Poli
 	var head struct {
 		Extends string `yaml:"extends"`
 	}
+	// The head probe only reads `extends`; other keys are validated in the strict
+	// decode below, so ignore unknown fields here.
 	if err := yaml.Unmarshal(raw, &head); err != nil {
 		return nil, fmt.Errorf("parsing: %w", err)
 	}
@@ -139,7 +144,14 @@ func parsePolicy(raw []byte, baseDir string, resolve Resolver, depth int) (*Poli
 	// Capture base lists, then overlay this policy onto the base struct.
 	be, bp, bd := base.Egress.AllowedEndpoints, base.File.ProtectedPaths, base.Process.Disallowed
 	bi := base.Egress.AllowedIPs
-	if err := yaml.Unmarshal(raw, base); err != nil {
+	// Strict decode: an unknown/misspelled key (e.g. `allow-endpoints` instead of
+	// `allowed-endpoints`, or `blocked-raw-ip`) is a silent-misconfiguration hazard -
+	// the intended allowlist entry or protection simply never takes effect and
+	// Validate() can't catch a field that never got set. Fail fast instead.
+	dec := yaml.NewDecoder(bytes.NewReader(raw))
+	dec.KnownFields(true)
+	// io.EOF = empty document (no overlay); keep the base as-is.
+	if err := dec.Decode(base); err != nil && !errors.Is(err, io.EOF) {
 		return nil, fmt.Errorf("parsing: %w", err)
 	}
 	base.Egress.AllowedEndpoints = unionDedup(be, base.Egress.AllowedEndpoints)
@@ -152,11 +164,26 @@ func parsePolicy(raw []byte, baseDir string, resolve Resolver, depth int) (*Poli
 
 // resolveRef returns the raw bytes for an extends ref plus the directory used to
 // resolve any nested relative extends within it.
+//
+// A local `extends` is confined to baseDir (the directory of the policy that
+// declared it): both absolute paths and "../" traversal that escape baseDir are
+// rejected. policy.yaml is frequently the artifact an untrusted PR edits, so an
+// unconfined `extends: ../../../../etc/somefile` would let a crafted policy pull
+// an arbitrary local file in as its base. Confinement keeps the base policy
+// inside the repo checkout the policy itself lives in.
 func resolveRef(ref, baseDir string, resolve Resolver) ([]byte, string, error) {
 	if !strings.Contains(ref, "://") { // local file, possibly relative
-		p := ref
-		if !filepath.IsAbs(p) {
-			p = filepath.Join(baseDir, p)
+		if filepath.IsAbs(ref) {
+			return nil, "", fmt.Errorf("extends %q: absolute paths are not allowed; use a path relative to the policy file", ref)
+		}
+		p := filepath.Join(baseDir, ref)
+		root, rerr := filepath.Abs(baseDir)
+		abs, aerr := filepath.Abs(p)
+		if rerr != nil || aerr != nil {
+			return nil, "", fmt.Errorf("extends %q: resolving path: %w", ref, errors.Join(rerr, aerr))
+		}
+		if abs != root && !strings.HasPrefix(abs, root+string(os.PathSeparator)) {
+			return nil, "", fmt.Errorf("extends %q: path escapes the policy directory (%s)", ref, baseDir)
 		}
 		b, err := os.ReadFile(p)
 		return b, filepath.Dir(p), err
@@ -396,14 +423,78 @@ func (p *Policy) EvalFile(f event.FileWrite) *event.Violation {
 	return nil
 }
 
+// pathMatches reports whether a write to path hits a protected pattern. Both
+// sides are canonicalized before comparison so an attacker can't slip past a
+// prefix match with "..", redundant separators, or a symlink: each side is
+// reduced to its filepath.Clean form AND (when it resolves on disk) its
+// EvalSymlinks real path, and any candidate form of the write is matched against
+// any form of the pattern.
+//
+// Residual (documented in SECURITY.md, tracked for the netsec re-gate): a write
+// captured as a RELATIVE path (openat with a non-'/' first byte) can't be
+// anchored to the process's cwd here - the eBPF layer records the raw pathname,
+// not the resolved dfd/cwd - so `cd ~ && >> .ssh/authorized_keys` still evades a
+// `/home/<user>/.ssh/...` pattern. Closing that fully needs capture-time cwd
+// resolution in the collector. File/process policy is therefore best-effort
+// detection, not an enforcement boundary.
 func pathMatches(pattern, path string) bool {
-	if home, err := os.UserHomeDir(); err == nil {
-		if rest, ok := strings.CutPrefix(pattern, "~"); ok {
-			pattern = home + rest
+	pats := canonicalForms(expandHome(pattern))
+	if len(pats) == 0 {
+		return false
+	}
+	for _, cand := range canonicalForms(path) {
+		for _, pat := range pats {
+			if cand == pat || strings.HasPrefix(cand, pat+"/") {
+				return true
+			}
 		}
 	}
-	pattern = strings.TrimSuffix(pattern, "/")
-	return path == pattern || strings.HasPrefix(path, pattern+"/")
+	return false
+}
+
+// expandHome expands a leading "~" to the user's home directory.
+func expandHome(p string) string {
+	if home, err := os.UserHomeDir(); err == nil {
+		if rest, ok := strings.CutPrefix(p, "~"); ok {
+			return home + rest
+		}
+	}
+	return p
+}
+
+// canonicalForms returns the distinct normalized forms of a path to compare:
+// its filepath.Clean form, and its symlink-resolved real path when it (or, for a
+// not-yet-existing target, its parent directory) resolves on disk. Trailing
+// slashes are trimmed. Empty input yields no forms.
+func canonicalForms(p string) []string {
+	p = strings.TrimSuffix(p, "/")
+	if p == "" {
+		return nil
+	}
+	seen := map[string]struct{}{}
+	var out []string
+	add := func(s string) {
+		s = strings.TrimSuffix(s, "/")
+		if s == "" {
+			return
+		}
+		if _, ok := seen[s]; !ok {
+			seen[s] = struct{}{}
+			out = append(out, s)
+		}
+	}
+	clean := filepath.Clean(p)
+	add(clean)
+	if resolved, err := filepath.EvalSymlinks(clean); err == nil {
+		add(resolved)
+	} else if dir, base := filepath.Split(clean); dir != "" {
+		// Target may not exist yet (e.g. authorized_keys about to be created);
+		// resolve the parent so a symlinked directory in the path is still caught.
+		if rdir, err := filepath.EvalSymlinks(strings.TrimSuffix(dir, "/")); err == nil {
+			add(filepath.Join(rdir, base))
+		}
+	}
+	return out
 }
 
 // EvalProcess flags execution of a disallowed executable. Patterns may be a

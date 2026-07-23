@@ -106,6 +106,13 @@ func executeRun(cmd *cobra.Command, pol *policy.Policy, command []string, disabl
 	// placed into the enforcer's cgroup so the egress filter scopes to the build.
 	exitCode := runCommand(ctx, command, enf.ListenAddr(), enf.BuildCgroupFD())
 
+	// Reap anything the build left running (block mode: the whole build cgroup)
+	// BEFORE the report is written, so a detached/daemonized process can't keep
+	// overwriting report.json after Egret writes it and forge the SARIF / PR comment
+	// / dashboard that downstream consumers re-read from disk. The deferred teardown
+	// reaps again; this earlier call is what closes the report-tampering race.
+	enf.KillBuild()
+
 	// Let any final in-flight events flush, then stop the collector (closes the
 	// ring-buffer readers, which closes the event channels and ends the drains).
 	time.Sleep(250 * time.Millisecond)
@@ -183,7 +190,14 @@ func runCommand(ctx context.Context, command []string, dnsAddr string, cgroupFD 
 		c = exec.CommandContext(ctx, "/proc/self/exe", guardedArgs...)
 		c.SysProcAttr = &syscall.SysProcAttr{UseCgroupFD: true, CgroupFD: cgroupFD}
 	} else {
+		// Audit mode has no build cgroup to reap descendants from, so put the command
+		// in its own process group: after it exits we SIGKILL the whole group, so a
+		// process it backgrounded (e.g. `... & disown`) can't outlive the command and
+		// race the report file. (A child that deliberately setsid()s out of the group
+		// still escapes - the cgroup reap in block mode is the stronger boundary - but
+		// the atomic report write closes the torn-read window regardless.)
 		c = exec.CommandContext(ctx, command[0], command[1:]...)
+		c.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	}
 	c.Stdin = os.Stdin
 	c.Stdout = os.Stdout
@@ -195,6 +209,13 @@ func runCommand(ctx context.Context, command []string, dnsAddr string, cgroupFD 
 		return 127
 	}
 	err := c.Wait()
+	// Audit mode: reap the command's process group so a backgrounded child can't
+	// linger and overwrite the report. Negative pid = signal the whole group led by
+	// the command (Setpgid made it the leader). Best-effort; ESRCH just means the
+	// group already exited. Block mode reaps via the cgroup (enf.KillBuild).
+	if cgroupFD < 0 && c.Process != nil {
+		_ = syscall.Kill(-c.Process.Pid, syscall.SIGKILL)
+	}
 	if err == nil {
 		return 0
 	}

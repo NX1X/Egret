@@ -34,6 +34,12 @@ type firewall interface {
 	// Teardown removes all rules/sets Egret installed, restoring the host.
 	// Must be idempotent and safe to call from a signal handler.
 	Teardown() error
+	// KillBuild SIGKILLs every process still in the build cgroup. It is called
+	// after the monitored command exits and BEFORE the report is written, so a
+	// process the build detached/daemonized can't outlive the command and race
+	// the report file. No-op in audit mode (no build cgroup). Idempotent; the
+	// deferred Teardown calls the same reaper again.
+	KillBuild()
 	// ProbeCanary is a non-allowlisted destination (host:port) the self-probe
 	// targets to check the cgroup egress filter is actually confining the build.
 	// Empty when there is no firewall (audit mode).
@@ -113,6 +119,11 @@ func (e *Enforcer) onResolved(domain string, ips []net.IP, ttlSeconds uint32) {
 // filter scopes to the build (not Egret itself). -1 in audit mode.
 func (e *Enforcer) BuildCgroupFD() int { return e.fw.BuildCgroupFD() }
 
+// KillBuild reaps any process still alive in the build cgroup. Call it once the
+// monitored command has returned and before writing the report, so a detached
+// build process can't keep overwriting the report file after Egret writes it.
+func (e *Enforcer) KillBuild() { e.fw.KillBuild() }
+
 // ProbeCanary + ProbeDropCount expose the self-probe hooks so the CLI can, after
 // setup, fork a probe into the build cgroup toward the canary and confirm the
 // cgroup-scoped drop actually fired (fail-closed if it didn't). (netsec F-C.)
@@ -135,5 +146,6 @@ func (noopFirewall) Setup(context.Context) error                    { return nil
 func (noopFirewall) AllowIPs(string, []net.IP, uint32) error        { return nil }
 func (noopFirewall) BuildCgroupFD() int                             { return -1 }
 func (noopFirewall) Teardown() error                                { return nil }
+func (noopFirewall) KillBuild()                                     {}
 func (noopFirewall) ProbeCanary() string                            { return "" }
 func (noopFirewall) ProbeDropCount(context.Context) (uint64, error) { return 0, nil }

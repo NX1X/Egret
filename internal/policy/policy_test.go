@@ -272,7 +272,9 @@ func TestEvalFile(t *testing.T) {
 		{"/etc", true}, // exact dir
 		{".git/config", true},
 		{"/var/log/app.log", false},
-		{home + "/.ssh/id_rsa", true}, // ~ expands to the user's home dir
+		{home + "/.ssh/id_rsa", true},      // ~ expands to the user's home dir
+		{"/etc/../etc/passwd", true},       // ".." traversal is canonicalized before matching
+		{"/etc/../var/log/app.log", false}, // ".." that escapes /etc must NOT match
 	}
 	for _, tc := range tests {
 		got := p.EvalFile(event.FileWrite{Path: tc.path}) != nil
@@ -354,6 +356,41 @@ egress:
 	}
 	if p.Extends != "" {
 		t.Errorf("Extends should be cleared, got %q", p.Extends)
+	}
+}
+
+func TestExtendsRejectsTraversalOutsideBaseDir(t *testing.T) {
+	root := t.TempDir()
+	// A sensitive file OUTSIDE the policy directory.
+	secretDir := t.TempDir()
+	os.WriteFile(filepath.Join(secretDir, "secret.yaml"), []byte("version: 1\nmode: block\n"), 0o644)
+
+	policyDir := filepath.Join(root, "repo")
+	os.MkdirAll(policyDir, 0o755)
+	child := filepath.Join(policyDir, "child.yaml")
+
+	// Relative traversal that escapes the policy directory must be rejected.
+	rel, _ := filepath.Rel(policyDir, filepath.Join(secretDir, "secret.yaml"))
+	os.WriteFile(child, []byte("version: 1\nextends: "+rel+"\nmode: audit\n"), 0o644)
+	if _, err := Load(child); err == nil {
+		t.Error("extends escaping the policy dir via .. should be rejected")
+	}
+
+	// An absolute extends path must also be rejected.
+	os.WriteFile(child, []byte("version: 1\nextends: "+filepath.Join(secretDir, "secret.yaml")+"\nmode: audit\n"), 0o644)
+	if _, err := Load(child); err == nil {
+		t.Error("absolute extends path should be rejected")
+	}
+}
+
+func TestUnknownPolicyFieldRejected(t *testing.T) {
+	dir := t.TempDir()
+	// `allow-endpoints` is a typo for `allowed-endpoints`; strict decoding must
+	// fail fast rather than silently drop the intended allowlist.
+	p := filepath.Join(dir, "typo.yaml")
+	os.WriteFile(p, []byte("version: 1\nmode: block\negress:\n  allow-endpoints: [github.com]\n"), 0o644)
+	if _, err := Load(p); err == nil {
+		t.Error("unknown/misspelled policy field should be rejected by strict decode")
 	}
 }
 

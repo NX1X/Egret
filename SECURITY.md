@@ -103,6 +103,42 @@ High-value classes for Egret specifically:
 - **Supply-chain / CI issues** in the release and Action workflows - e.g. an
   injection that could tamper with a published binary.
 
+## Trust boundaries and known limitations
+
+Egret is honest about where its guarantees stop. Read this before relying on it
+as a hard control.
+
+- **The policy file is read from the checked-out ref.** On a plain
+  `pull_request` run the workflow checks out the PR **head**, so
+  `policy: .github/egret-policy.yaml` is whatever the PR author wrote - a PR can
+  weaken the very policy that judges it. This is the same trust rule that applies
+  to a workflow definition from a fork. To keep the policy trusted:
+  - Load the policy from the **base branch**, not the PR head. For example,
+    before the Egret step:
+    ```yaml
+    - run: git show "origin/${{ github.base_ref }}:.github/egret-policy.yaml" > /tmp/egret-policy.yaml
+    - uses: NX1X/Egret@<pinned-sha>
+      with:
+        policy: /tmp/egret-policy.yaml
+    ```
+  - Protect `.github/egret-policy.yaml` with CODEOWNERS + branch protection so the
+    merged copy is always reviewed.
+  - Keep `block` mode for trusted events (push / merge) and run untrusted PRs in
+    `audit`.
+
+- **File and process policy is best-effort detection, not an enforcement
+  boundary.** Egress (block mode) is enforced in the kernel; `protected-paths`
+  and `process.disallowed` are observational. Path matching canonicalizes both
+  sides (resolving `..` and symlinks), but a write captured as a **relative**
+  path can't currently be anchored to the process's working directory (the eBPF
+  layer records the raw pathname, not the resolved cwd), so a determined build
+  can still evade a `protected-paths` entry with a relative or live-symlink
+  write. Treat these signals as detection that raises the bar, not as a
+  guarantee. (Capture-time cwd resolution is tracked as a hardening follow-up.)
+
+- **Egress bypass residuals** (DoH/DoT, raw IP, QUIC, CDN IP rotation) are listed
+  under "What we're especially interested in" below.
+
 ## Supported versions
 
 Egret is pre-1.0 and under active development. Only the latest tagged release

@@ -22,6 +22,7 @@ jobs:
   zizmor:
     name: zizmor (workflow lint)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
       security-events: write
@@ -34,7 +35,21 @@ jobs:
         run: pipx install zizmor
 
       - name: Run zizmor
-        run: zizmor --format sarif .github/workflows > zizmor.sarif || true
+        # zizmor exits non-zero when it FINDS issues - those still surface via the
+        # SARIF upload below, so we don't want that to fail the job. But a genuine
+        # tool failure (bad install, crash, unparseable workflow) must NOT pass
+        # silently behind `|| true`: require a valid, non-empty SARIF document and
+        # only tolerate the findings-present case.
+        run: |
+          set +e
+          zizmor --format sarif .github/workflows > zizmor.sarif
+          rc=$?
+          set -e
+          if ! python3 -c 'import json; json.load(open("zizmor.sarif"))' 2>/dev/null; then
+            echo "::error::zizmor did not produce a valid SARIF report (exit ${rc}); treating this as a tool failure, not a clean run."
+            exit 1
+          fi
+          echo "zizmor completed (exit ${rc}); findings, if any, are in the SARIF upload."
 
       - name: Upload SARIF
         uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2
@@ -44,6 +59,7 @@ jobs:
   scorecard:
     name: OpenSSF Scorecard
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
       security-events: write
@@ -69,6 +85,7 @@ jobs:
     name: Dependency Review
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
       pull-requests: read
@@ -84,6 +101,7 @@ jobs:
   govulncheck:
     name: govulncheck
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:
@@ -102,6 +120,7 @@ jobs:
   codeql:
     name: CodeQL (Go, security-extended)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
       security-events: write

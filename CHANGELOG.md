@@ -3,6 +3,49 @@
 Notable changes to Egret, following [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - Pentest hardening
+
+### Security
+
+- **Report artifacts are now tamper-resistant.** `report.json` / `.md` / `.sarif`
+  are written atomically (temp file + rename), and the build's descendants are
+  reaped (the whole build cgroup in block mode, the command's process group in
+  audit mode) BEFORE the report is written - so a process the build detaches can
+  no longer race and overwrite the report that the SARIF upload, PR comment, and
+  dashboard issue are generated from.
+- **Report cells can no longer be forged via hostile filenames.** `mdEscape` now
+  strips CR/LF (and caps cell length), so a captured filename like
+  `evil\n\n## No violations` can't inject fake rows/headers into the Markdown
+  report or job summary.
+- **Protected-path matching is canonicalized.** File/process policy now resolves
+  `..` and symlinks on both sides before matching, closing the traversal and
+  symlink-through bypasses. (Relative-path writes remain best-effort pending
+  capture-time cwd resolution - documented in SECURITY.md.)
+- **`extends:` is confined to the policy directory.** A local `extends` ref can
+  no longer escape its base directory via `..` or an absolute path, so a crafted
+  policy can't pull an arbitrary local file in as its base.
+- **Policy files are strict-decoded.** An unknown or misspelled key (e.g.
+  `allow-endpoints`) now fails fast instead of silently disabling the intended
+  rule.
+- **The DNS proxy refuses multi-question packets**, closing a path where a denied
+  name could ride along in a second question past the allowlist check.
+- **The Action installer verifies the release cosign signature.** When `cosign`
+  is present, `SHA256SUMS.bundle` is verified (fail closed) before trusting the
+  checksum; a new `require-signature` input makes its absence a hard failure.
+- **CI/CD hardening:** `harden-runner` (audit) on the release + app-token jobs,
+  `concurrency` + per-job `timeout-minutes` across CI/Security workflows, zizmor
+  tool-failure no longer hidden behind `|| true`, and `action.yml` uses
+  `$GITHUB_ACTION_PATH` instead of interpolating `github.action_path` into `run:`.
+
+### Documentation
+
+- **SECURITY.md** gains a "Trust boundaries and known limitations" section: the
+  policy file is read from the checked-out ref (attacker-editable on
+  `pull_request` unless loaded from the base branch), and file/process policy is
+  best-effort detection, not an enforcement boundary.
+- Usage examples pin the Action to a commit SHA (floating tags noted as the
+  convenience alternative).
+
 ## [0.1.3] - Action rename + Code Scanning cleanup
 
 ### Changed
