@@ -4,6 +4,40 @@ Thanks for helping build Egret. This project pairs a Go userspace agent with
 eBPF C programs, so a few things are stricter than a typical repo - mostly
 around the egress enforcer and the build toolchain.
 
+## We're looking for contributors
+
+Egret is young and actively maintained, and I'd genuinely like people to build
+it with me - not just drive-by patches, but regulars who take an area and own
+it. If you care about eBPF, CI/CD supply-chain security, or Go systems code,
+there is room for you here.
+
+- **Say hi first if you want:** open a [Discussion](https://github.com/NX1X/Egret/discussions)
+  or a draft issue describing what you'd like to work on. No ceremony required -
+  a small PR is a perfectly good introduction.
+- **How reviews work right now:** while the team is small, the maintainer
+  reviews PRs (often async, usually within a few days). The review *gates* below
+  aren't gatekeeping - they're the checklist your PR is measured against, and
+  they apply to the maintainer's own changes too. As the project grows we move
+  to peer review and hand out merge rights to established contributors.
+- **Recognition:** sustained contributors get listed as maintainers and, where
+  they want it, review/merge rights on their area.
+
+### Good first contributions
+
+Low-context, high-value places to start:
+
+- **More fuzz targets.** We fuzz the untrusted-input parsers (`policy`, `ingest`);
+  the DNS proxy, SARIF/report readers, and audit-session decoding are good next
+  targets. See `internal/policy/fuzz_test.go` for the pattern.
+- **Policy examples** under `examples/` for a stack you know (Node, Python, Rust,
+  container builds).
+- **Distro/runner coverage:** try `egret run` on a distro or CI runner we don't
+  test yet and file what breaks - the enforcer's kernel assumptions vary.
+- **Docs:** anything in `docs/` that tripped you up while getting started.
+
+Anything tagged `good first issue` or `help wanted` is fair game - comment to
+claim it so we don't double up.
+
 ## Ground rules
 
 - Read [docs/ROADMAP.md](docs/ROADMAP.md) first.
