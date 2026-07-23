@@ -33,7 +33,9 @@ jobs:
     # Steps run INSIDE this container (own cgroup namespace = the F-C topology).
     # --privileged grants CAP_BPF + nftables; the cgroup ns is still the container's.
     container:
-      image: golang:1.25-bookworm
+      # Digest-pinned; Renovate maintains. Bumped to Go 1.26 to match the rest of
+      # the repo (go.mod go1.26.5).
+      image: golang:1.26-bookworm@sha256:1ecb7edf62a0408027bd5729dfd6b1b8766e578e8df93995b225dfd0944eb651
       options: --privileged
     continue-on-error: true # informative until the expected outcome is confirmed
     steps:

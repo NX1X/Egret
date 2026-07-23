@@ -28,7 +28,11 @@ concurrency:
 
 jobs:
   release:
-    runs-on: ubuntu-latest
+    # Pin the runner image on the trust path: the release binary must build on a
+    # known, reproducible OS rather than a moving `ubuntu-latest`. Bump this
+    # deliberately when GitHub deprecates the image (SLSA provenance also records
+    # the exact runner). CI/test jobs keep `ubuntu-latest` for auto-patching.
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     # `release` is a protected GitHub Environment: add required reviewers (+ an
     # optional wait timer) in repo Settings → Environments so a tag push can't
