@@ -144,7 +144,7 @@ generation - shipped as a CLI and a GitHub Action, with no server and no phone-h
   job summary. Inputs include `command`, `policy`, `mode`, `disable-sudo`, and an
   optional `ingest-url` to POST the run to a self-hosted dashboard.
 - **GitHub App integration** (server-less): PR checks, sticky comments, a
-  Renovate-style allowlist dashboard issue, and an audit → allowlist-PR loop - all
+  self-updating allowlist dashboard issue, and an audit → allowlist-PR loop - all
   work with a plain `GITHUB_TOKEN` or an App token.
 
 ### Security
