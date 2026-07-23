@@ -76,7 +76,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # Mint a short-lived installation token from the App's key.
-      - uses: actions/create-github-app-token@v1
+      - uses: actions/create-github-app-token@v3   # pin to a full SHA in real workflows
         id: egret-token
         with:
           app-id: ${{ secrets.EGRET_APP_ID }}

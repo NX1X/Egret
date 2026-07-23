@@ -14,16 +14,18 @@ The name plays on **egress** (its core job) and the egret bird. CLI:
 [![CI](https://github.com/NX1X/Egret/actions/workflows/ci.yml/badge.svg)](https://github.com/NX1X/Egret/actions/workflows/ci.yml)
 [![Security](https://github.com/NX1X/Egret/actions/workflows/security.yml/badge.svg)](https://github.com/NX1X/Egret/actions/workflows/security.yml)
 [![Release](https://img.shields.io/github/v/release/NX1X/Egret?logo=github&logoColor=white&sort=semver)](https://github.com/NX1X/Egret/releases/latest)
-[![Go Report Card](https://goreportcard.com/badge/github.com/NX1X/Egret)](https://goreportcard.com/report/github.com/NX1X/Egret)
+[![Watchers](https://img.shields.io/github/watchers/NX1X/Egret?style=flat&logo=github&label=watchers)](https://github.com/NX1X/Egret/watchers)
 [![Go](https://img.shields.io/github/go-mod/go-version/NX1X/Egret?logo=go&logoColor=white)](go.mod)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![GitHub - NX1X/Egret](https://img.shields.io/badge/GitHub-NX1X%2FEgret-181717?logo=github&logoColor=white)](https://github.com/NX1X/Egret)
 
-- **Status:** pre-MVP / active development (see [docs/ROADMAP.md](docs/ROADMAP.md))
+- **Status:** released (v0.1.3), pre-1.0, active development (see [docs/ROADMAP.md](docs/ROADMAP.md))
 - **Repository:** [github.com/NX1X/Egret](https://github.com/NX1X/Egret)
 - **License:** [Apache-2.0](LICENSE)
 - **Platform:** Linux 5.8+ (eBPF CO-RE). Builds of the non-eBPF packages run on
   any OS; the agent itself runs on Linux.
+
+**Links:** [Website](https://egret.nx1xlab.dev/) · [Download](https://egret.nx1xlab.dev/download/) · [GitHub Action](https://github.com/marketplace/actions/egret-security-action) · [GitHub App](https://github.com/apps/egret-security-app) · [Dashboard - Egret Nest](https://github.com/NX1X/Egret-Nest-Dashboard)
 
 ---
 
@@ -130,6 +132,13 @@ several steps.
 | `disable-sudo` | `false` | block mode: revoke the build user's passwordless sudo for the run (belt to `no_new_privs`) |
 | `ingest-url` | `""` | optional self-hosted [Egret Nest](docs/ingest-contract.md) URL to POST the run to (empty = stay local, no phone-home) |
 | `ingest-token` | `""` | bearer token for `ingest-url` (pass a secret; sent as a header, never on a command line) |
+| `output-dir` | `""` | dir for `report.json`/`.md`/`.sarif` (default `$RUNNER_TEMP/egret/report`) |
+| `github-token` | `""` | token for the App-publish features below (App installation token, or `GITHUB_TOKEN`) |
+| `check-run` | `false` | publish a branded pass/fail check run (needs `github-token`, `checks: write`) |
+| `pr-comment` | `false` | post/update a sticky PR comment with the report (needs `github-token`, `pull-requests: write`) |
+| `dashboard-issue` | `false` | create/update the Egret Security Dashboard issue (needs `github-token`, `issues: write`) |
+| `allow-build-from-source` | `false` | build from source if no verified release exists (unpinned; off by default) |
+| `allow-pull-request-target` | `false` | permit running under `pull_request_target` (runs your command as **root**) |
 
 Outputs: `report-dir`, `sarif-file`, `violations`. See [action/](action/) for
 details. Transparent tracing of *every* step without a wrapper needs a pre-job
@@ -196,7 +205,7 @@ are added to an nftables allow-set, and everything else is default-denied.
 | `internal/enforcer` | DNS proxy + nftables firewall (Linux) |
 | `internal/report` | Markdown/JSON/job-summary writers |
 | `internal/audit` | observed run → suggested allowlist |
-| `action/` | GitHub Action wrapper |
+| `action.yml` (root) | GitHub Action definition; `action/` holds the bundled cleanup action + docs |
 
 ---
 
@@ -233,7 +242,7 @@ required" invariant, and [docs/github-app.md](docs/github-app.md) to set up the 
 | Doc | Owns |
 |---|---|
 | [docs/ROADMAP.md](docs/ROADMAP.md) | What Egret is, what works, where it's going |
-| [CHANGELOG.md](CHANGELOG.md) | Released changes (agent not tagged yet - ships v1.0 with the dashboard) |
+| [CHANGELOG.md](CHANGELOG.md) | Released-version history (v0.1.0 → v0.1.3) |
 | [docs/DEPENDENCIES.md](docs/DEPENDENCIES.md) | Dependency policy |
 | [docs/github-app.md](docs/github-app.md) | GitHub App setup |
 | [docs/ingest-contract.md](docs/ingest-contract.md) | The agent→dashboard envelope (only cross-repo seam) |
