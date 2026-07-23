@@ -13,9 +13,7 @@ The name plays on **egress** (its core job) and the egret bird. CLI:
 
 [![CI](https://github.com/NX1X/Egret/actions/workflows/ci.yml/badge.svg)](https://github.com/NX1X/Egret/actions/workflows/ci.yml)
 [![Security](https://github.com/NX1X/Egret/actions/workflows/security.yml/badge.svg)](https://github.com/NX1X/Egret/actions/workflows/security.yml)
-[![Release](https://img.shields.io/github/v/release/NX1X/Egret?logo=github&logoColor=white&sort=semver)](https://github.com/NX1X/Egret/releases/latest)
-[![Go Report Card](https://goreportcard.com/badge/github.com/NX1X/Egret)](https://goreportcard.com/report/github.com/NX1X/Egret)
-[![Go](https://img.shields.io/github/go-mod/go-version/NX1X/Egret?logo=go&logoColor=white)](go.mod)
+[![Release](https://img.shields.io/github/v/release/NX1X/Egret?logo=github&logoColor=white&sort=semver)](https://github.com/NX1X/Egret/releases/latest)[![Go](https://img.shields.io/github/go-mod/go-version/NX1X/Egret?logo=go&logoColor=white)](go.mod)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![GitHub - NX1X/Egret](https://img.shields.io/badge/GitHub-NX1X%2FEgret-181717?logo=github&logoColor=white)](https://github.com/NX1X/Egret)
 
