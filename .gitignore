@@ -36,6 +36,8 @@ Thumbs.db
 CLAUDE.md
 .vscode/settings.local.json
 **/settings.local.json
+.vscode
+.vscode/
 
 # generated CO-RE header (from kernel BTF via bpftool)
 internal/bpf/vmlinux.h
