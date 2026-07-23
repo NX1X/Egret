@@ -145,6 +145,15 @@ jobs:
               --verify-tag
           fi
 
+      # Tell the website to re-sync docs on this release (best-effort - never
+      # fails the release). Needs a WEBSITE_DISPATCH_TOKEN secret: a fine-grained
+      # PAT scoped to NX1X/Egret-website with Contents: read+write.
+      - name: Trigger website docs re-sync
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.WEBSITE_DISPATCH_TOKEN }}
+        run: gh api repos/NX1X/Egret-website/dispatches -f event_type=product-release
+
   # Two independent verification paths ship with every release:
   #   1. SLSA build provenance (actions/attest-build-provenance):
   #        gh attestation verify egret_linux_amd64 --repo NX1X/Egret
