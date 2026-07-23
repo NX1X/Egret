@@ -24,10 +24,8 @@ Pick whichever is easiest - all three are private:
 | Email | **support@nx1xlab.dev**, subject `SECURITY: Egret` |
 | Contact form | <https://nx1xlab.dev/contact> |
 
-Anonymous reports are welcome. If your report is sensitive and you'd like to
-encrypt it, our PGP key is published at
-<https://egret.nx1xlab.dev/.well-known/pgp-key.txt> (you can also just ask for
-it in a first short email).
+Anonymous reports are welcome, and plain email is completely fine - no PGP or
+special tooling required.
 
 For non-security bugs and questions, please use a public issue instead:
 <https://github.com/NX1X/Egret/issues>.
