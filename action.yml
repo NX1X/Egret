@@ -133,7 +133,7 @@ runs:
     # block-mode violation trips the run step - exactly when the signal matters.
     - name: Upload SARIF to Code Scanning
       if: ${{ always() && inputs.command != '' && inputs.sarif == 'true' && inputs.upload-sarif == 'true' && steps.run.outputs.sarif-file != '' }}
-      uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2
+      uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
       with:
         sarif_file: ${{ steps.run.outputs.sarif-file }}
         category: egret
