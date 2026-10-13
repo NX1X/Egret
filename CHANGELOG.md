@@ -3,6 +3,114 @@
 Notable changes to Egret, following [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - Install robustness + CI cost and timeout work
+
+### Fixed
+
+- **The installer no longer hangs without a timeout.** Every release download
+  (`SHA256SUMS`, `SHA256SUMS.bundle`, the binary, and the `latest` tag lookup) now
+  has a connect timeout, a total-transfer ceiling, and bounded retries on transient
+  failures. Previously a blackholed connection or a stalled CDN hung *your* job
+  until *your* job timeout with no diagnostic, and a single transient 5xx failed the
+  install outright. Retries deliberately exclude hard client errors, so a bad token
+  or a missing asset still fails on the first response instead of after four.
+- **`version: latest` can now be authenticated.** Pass `github-token` (e.g.
+  `${{ github.token }}`) and the release lookup uses it. The unauthenticated GitHub
+  API allows 60 requests/hour per runner IP, shared across every Actions job on that
+  IP; exceeding it previously surfaced as a confusing "release asset not found".
+  When the lookup does fail, the error now names the likely cause and the fix.
+- **A malformed `github-token` now fails with the real reason.** The token check
+  ran inside the pipeline that parses the release tag, so its error message was
+  swallowed and you saw a misleading "rate limit" hint instead. The token is now
+  checked once, before the lookup, and the install stops with a message that names
+  the problem. A regression test (`test/action`) runs the real `entrypoint.sh`
+  without root or network.
+- **Download retries now have a total time limit.** The per-attempt ceiling applied
+  to every retry, so a stalled binary download could take about 20 minutes before it
+  failed. `--retry-max-time` stops new retries once the ceiling has passed, which
+  halves the worst case.
+- **OpenSSF Scorecard runs again.** `ossf/scorecard-action` v2.4.0 pulls its image
+  from `gcr.io`, and that pull is now refused. v2.5.0 pulls from `ghcr.io`.
+
+### Security
+
+- **Go toolchain 1.26.9 (GO-2026-6617).** The release binary and CI now build with
+  Go 1.26.9, which fixes an HTTP/2 crash caused by a race in the `net/http` HPACK
+  encoder. `govulncheck` reported it as reachable, which failed the security
+  workflow on `main`.
+- **`cilium/ebpf` v0.22.0 (GO-2026-6238).** v0.16.0 had an integer overflow in BTF
+  parsing, and `govulncheck` reported it as reachable. The upgrade also moves the
+  indirect `cobra`, `pflag`, `x/mod`, `x/sync` and `x/tools` modules forward. The
+  committed eBPF bindings build and pass all tests against the new version, and CI
+  now loads them into a real kernel on every change (see Changed).
+- **The wrapped build no longer inherits `EGRET_INGEST_TOKEN` either.** Egret passed
+  its own environment verbatim to your build in both audit and block mode, so a
+  hostile dependency could read the dashboard ingest credential straight out of
+  `os.Environ()` - and use it to forge or suppress the very findings meant to catch
+  it. Egret's credentials are now filtered from the child process in one place, with
+  tests. `EGRET_INGEST_URL` and everything else is untouched.
+- **`github-token` is validated before use.** It is passed to curl through a config
+  file on stdin (to keep it out of `/proc/<pid>/cmdline`), and curl's config format
+  is an option grammar rather than a header string - so a token containing a quote
+  and a newline could inject arbitrary curl directives, including one that redirects
+  the request to another host and sends the bearer header along with it. Real GitHub
+  tokens cannot express that, but the input is free text on a published action, so
+  the value is now rejected unless it matches `[A-Za-z0-9_.-]+`.
+- **Release downloads are pinned to HTTPS and ignore `~/.curlrc`.** `--proto`/
+  `--proto-redir` stop a redirect from downgrading the `latest` lookup to plaintext
+  (the one leg covered by neither checksum nor signature, so a downgrade could roll
+  a consumer back to an older, still-validly-signed release). `-q` stops a root
+  build from writing a `~/.curlrc` containing `insecure` and turning every later
+  Egret fetch into an unverified-TLS download - which matters most on persistent
+  self-hosted runners, where the poisoned file survives into other jobs.
+- **No ambient `GITHUB_TOKEN` fallback.** The release lookup uses only a credential
+  explicitly passed to the action, matching how the publish path already behaved.
+- Documentation now states plainly that stripping the token from the wrapped
+  command is **hardening, not isolation**: your build runs as root and can read the
+  action's environment via `/proc`. Previous wording implied the risk was closed.
+- **The wrapped build no longer inherits `github-token`.** Egret runs your command
+  under `sudo -E`, which handed the entire step environment - including an App
+  installation token with `checks` / `issues` / `pull-requests` write - to the
+  third-party toolchain and dependency code Egret exists to watch. The token is now
+  stripped from the child environment; the publish calls that need it set it
+  explicitly per invocation. The token is also sent only to `api.github.com`, via
+  curl's stdin config rather than argv, so it is not readable from `/proc`.
+- **`zizmor` is pinned in the security workflow.** An unpinned installer there was
+  both an unreviewed supply-chain input and a source of findings that changed
+  between runs with no repo change. Renovate now tracks it, and `govulncheck`'s
+  pinned version, via custom managers.
+- `govulncheck` is still built from source on every run rather than cached. The
+  Actions cache is writable by any run on the same ref, and a restored scanner
+  binary that reports "no vulnerabilities" is a worse outcome than a slow one -
+  the same reasoning behind `cache: false` on the release trust path.
+
+### Changed
+
+- **CI now loads the eBPF probes from the commit under test.** The `ebpf` job runs
+  the freshly built binary under `sudo` in audit mode, monitors a `curl`, and fails
+  unless the network probe records the connection. Before, CI only proved that the
+  code compiled, and the action self-test used the published release, so a change
+  that broke probe loading would first fail for users after a release.
+- CI no longer runs the same work twice per commit: `govulncheck` ran as both a
+  step in `ci.yml` and a dedicated job in `security.yml`, and the pure packages'
+  tests ran in both CI jobs. `govulncheck` is now only the `security.yml` job, and
+  the `ebpf` job tests only the packages that need the generated eBPF bindings
+  (computed as the complement of `PURE_PKGS`, so a new package is never silently
+  dropped from CI).
+- OpenSSF Scorecard no longer runs on pull requests. It grades the repository, not
+  a diff, and `publish_results` cannot publish from a PR.
+- The `enforcer-regate` workflow's `push` trigger had path filters but no branch
+  filter, so it fired on release tags, on the floating `v0` tag, and on every branch
+  that already had a pull request running it. It now runs on the pull request and on
+  `main`. Its container install also dropped `clang`, `llvm` and `libbpf-dev`: the
+  job builds from committed bindings and the runtime only needs `nft`, so nothing
+  invoked them.
+- The action self-test gained a `concurrency` group (the only workflow without one,
+  so rapid pushes to a PR piled up parallel runs) and skips docs-only changes.
+- Job timeouts were sized against observed runtimes instead of 10-40x them, and the
+  network-facing steps gained their own step timeouts, so a hang surfaces in minutes
+  rather than at the end of a 20-minute job.
+
 ## [0.2.0] - Security hardening (pentest remediation)
 
 ### Changed (upgrade impact)
@@ -154,6 +262,8 @@ generation - shipped as a CLI and a GitHub Action, with no server and no phone-h
 - **Hardened by default:** no phone-home; egress/event records are metadata only
   (never payloads); block mode is fail-closed on teardown.
 
+[0.3.0]: https://github.com/NX1X/Egret/releases/tag/v0.3.0
+[0.2.0]: https://github.com/NX1X/Egret/releases/tag/v0.2.0
 [0.1.3]: https://github.com/NX1X/Egret/releases/tag/v0.1.3
 [0.1.2]: https://github.com/NX1X/Egret/releases/tag/v0.1.2
 [0.1.1]: https://github.com/NX1X/Egret/releases/tag/v0.1.1

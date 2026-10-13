@@ -133,7 +133,7 @@ several steps.
 | `ingest-url` | `""` | optional self-hosted [Egret Nest](docs/ingest-contract.md) URL to POST the run to (empty = stay local, no phone-home) |
 | `ingest-token` | `""` | bearer token for `ingest-url` (pass a secret; sent as a header, never on a command line) |
 | `output-dir` | `""` | dir for `report.json`/`.md`/`.sarif` (default `$RUNNER_TEMP/egret/report`) |
-| `github-token` | `""` | token for the App-publish features below (App installation token, or `GITHUB_TOKEN`) |
+| `github-token` | `""` | token for the App-publish features below (App installation token, or `GITHUB_TOKEN`). Also authenticates the `version: latest` release lookup, which the unauthenticated GitHub API rate-limits per runner IP. Pass the least-privileged token that works: your command runs as root, so treat any token given to Egret as reachable by the code it runs ([details](docs/github-app.md)) |
 | `check-run` | `false` | publish a branded pass/fail check run (needs `github-token`, `checks: write`) |
 | `pr-comment` | `false` | post/update a sticky PR comment with the report (needs `github-token`, `pull-requests: write`) |
 | `dashboard-issue` | `false` | create/update the Egret Security Dashboard issue (needs `github-token`, `issues: write`) |
@@ -271,5 +271,5 @@ Go review and a network-security review for enforcer changes. See
 
 ## License
 
-Egret is licensed under the [Apache License 2.0](LICENSE) - © 2026 NX1X
+Egret is licensed under the [Apache License 2.0](LICENSE) - © 2026-present NX1X
 ([nx1xlab.dev](https://nx1xlab.dev)). See [NOTICE](NOTICE) for attribution.
