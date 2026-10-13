@@ -148,8 +148,11 @@ func execGuarded(uid, gid int, command []string) error {
 			execGuardedCmdName, os.Getuid(), os.Geteuid())
 	}
 
-	// 4. Become the build. Inherits the cgroup + no_new_privs + empty bounding set.
-	if err := syscall.Exec(bin, command, os.Environ()); err != nil {
+	// 4. Become the build. Inherits the cgroup + no_new_privs + empty bounding set,
+	// but NOT Egret's own caller credentials (see env_linux.go). The parent already
+	// filtered these when it started this trampoline; repeating it keeps the
+	// guarantee local to the exec that actually hands control to the build.
+	if err := syscall.Exec(bin, command, sanitizedEnviron()); err != nil {
 		return fmt.Errorf("%s: exec %s: %w", execGuardedCmdName, bin, err)
 	}
 	return nil // unreachable on success

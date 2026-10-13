@@ -202,7 +202,10 @@ func runCommand(ctx context.Context, command []string, dnsAddr string, cgroupFD 
 	c.Stdin = os.Stdin
 	c.Stdout = os.Stdout
 	c.Stderr = os.Stderr
-	c.Env = append(os.Environ(), "EGRET_DNS="+dnsAddr)
+	// sanitizedEnviron, not os.Environ: the build must not inherit Egret's own
+	// caller credentials (see env_linux.go). Egret reads them from its own
+	// environment, which is unaffected.
+	c.Env = append(sanitizedEnviron(), "EGRET_DNS="+dnsAddr)
 
 	if err := c.Start(); err != nil {
 		fmt.Fprintln(os.Stderr, "egret: failed to start command:", err)
