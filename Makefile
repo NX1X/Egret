@@ -22,7 +22,7 @@ PURE_PKGS := ./internal/policy/... ./internal/report/... ./internal/audit/... \
 	./internal/event/... ./internal/monitor/... ./internal/enforcer/... \
 	./internal/sarif/... ./internal/ingest/...
 
-.PHONY: all generate vmlinux build build-static test test-pure cover test-e2e lint vet fmt tidy clean
+.PHONY: all generate vmlinux build build-static test test-pure test-linux-only cover test-e2e lint vet fmt tidy clean
 
 all: build
 
@@ -59,6 +59,22 @@ test:
 ## test-pure: tests that need no eBPF codegen (run anywhere, pre-generate).
 test-pure:
 	go test $(PURE_PKGS)
+
+## test-linux-only: the COMPLEMENT of PURE_PKGS - the packages that need the
+##   generated eBPF bindings. CI runs PURE_PKGS separately (under Egret, with
+##   coverage), so splitting here stops the same tests running twice per commit.
+##   The list is computed as ./... minus PURE_PKGS rather than hardcoded, so a NEW
+##   package lands here automatically instead of going silently untested; the
+##   non-empty assert catches the computation itself breaking.
+test-linux-only:
+	@pure=" $$(go list $(PURE_PKGS) | tr '\n' ' ') "; \
+	impure=""; \
+	for p in $$(go list ./...); do \
+	  case "$$pure" in *" $$p "*) ;; *) impure="$$impure $$p";; esac; \
+	done; \
+	[ -n "$$impure" ] || { echo "test-linux-only: computed an EMPTY package list - refusing to report success without testing anything"; exit 1; }; \
+	echo "go test$$impure"; \
+	go test $$impure
 
 ## cover: coverage for the pure packages, with an HTML report.
 cover:

@@ -33,6 +33,11 @@ jobs:
     # deliberately when GitHub deprecates the image (SLSA provenance also records
     # the exact runner). CI/test jobs keep `ubuntu-latest` for auto-patching.
     runs-on: ubuntu-24.04
+    # ~1.5m observed. Kept generous (not trimmed to the observed time like the CI
+    # jobs) because this job is rare, publishes the trust artifact, and would leave
+    # a half-published release behind if it were killed between `gh release create`
+    # and the asset upload. An earlier comment claimed the build alone takes ~20
+    # min, which would have put the whole publish right at the timeout - it does not.
     timeout-minutes: 20
     # `release` is a protected GitHub Environment: add required reviewers (+ an
     # optional wait timer) in repo Settings → Environments so a tag push can't
@@ -54,7 +59,7 @@ jobs:
       - name: Validate release tag format
         run: |
           # Reject anything that isn't vMAJOR.MINOR.PATCH before we check out that
-          # ref or spend ~20 min building - guards a mistyped manual-dispatch input
+          # ref or start the build - guards a mistyped manual-dispatch input
           # (e.g. a branch name) from reaching checkout/build/publish.
           [[ "${TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
             echo "::error::TAG '${TAG}' is not a vMAJOR.MINOR.PATCH release tag."; exit 1; }
@@ -67,8 +72,8 @@ jobs:
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           # Pin the patched toolchain (crypto/tls GO-2026-5856 + related stdlib
-          # advisories, all fixed in go1.26.5) so the trust artifact is built vuln-free.
-          go-version: "1.26.5"
+          # advisories, plus GO-2026-6617, all fixed by go1.26.9) so the trust artifact is built vuln-free.
+          go-version: "1.26.9"
           # No build cache on the release/trust path: a cache entry populated by a
           # lower-privileged workflow (PR) must not be restorable here (cache poisoning).
           cache: false
@@ -92,6 +97,7 @@ jobs:
       # SLSA build provenance (keyless, OIDC) - lets consumers verify the binary was
       # built by this workflow:  gh attestation verify egret_linux_amd64 --repo NX1X/Egret
       - name: Attest build provenance
+        timeout-minutes: 6
         uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
         with:
           subject-path: "egret_linux_amd64, SHA256SUMS"
@@ -107,14 +113,19 @@ jobs:
       #     --certificate-oidc-issuer https://token.actions.githubusercontent.com SHA256SUMS
       #   sha256sum -c SHA256SUMS         # <-- ties the signed digest to the binary
       - name: Install cosign
+        timeout-minutes: 5
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
       - name: Sign SHA256SUMS (keyless)
+        # Talks to Fulcio + Rekor; bound so a Sigstore outage fails in minutes
+        # rather than holding the release job open to its full timeout.
+        timeout-minutes: 6
         run: |
           cosign sign-blob --yes \
             --bundle SHA256SUMS.bundle \
             SHA256SUMS
 
       - name: Create or update GitHub Release
+        timeout-minutes: 8
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -150,6 +161,7 @@ jobs:
       # PAT scoped to NX1X/Egret-website with Contents: read+write.
       - name: Trigger website docs re-sync
         continue-on-error: true
+        timeout-minutes: 3
         env:
           GH_TOKEN: ${{ secrets.WEBSITE_DISPATCH_TOKEN }}
         run: gh api repos/NX1X/Egret-website/dispatches -f event_type=product-release
