@@ -117,23 +117,24 @@ jobs:
       # downloads the PUBLISHED release. So a change that breaks probe loading (for
       # example a cilium/ebpf bump) would otherwise first fail for users, after the
       # release. Hosted runners grant passwordless sudo, which eBPF and nftables need.
-      # `shell: bash` turns on pipefail, so a failing egret cannot hide behind tee.
+      # The assertion names the curl process and port. The probe has no cgroup
+      # filter, so a bare connection count could pass on the runner agent's own
+      # traffic without the probe ever seeing this command.
       - name: Smoke test - load eBPF probes and monitor a command (audit)
         timeout-minutes: 3
         shell: bash
         run: |
           out="${RUNNER_TEMP}/egret-smoke"
-          log="${RUNNER_TEMP}/egret-smoke.log"
           sudo ./bin/egret run --mode audit --output-dir "${out}" -- \
-            curl -fsS --connect-timeout 10 --max-time 30 https://example.com -o /dev/null \
-            | tee "${log}"
+            curl -fsS --connect-timeout 10 --max-time 30 https://example.com -o /dev/null
           sudo test -s "${out}/report.json" || { echo "::error::egret wrote no report.json"; exit 1; }
-          n="$(sed -n 's/^egret: \([0-9][0-9]*\) connection(s).*/\1/p' "${log}")"
-          if [ "${n:-0}" -lt 1 ]; then
-            echo "::error::the eBPF network probe recorded ${n:-0} connections for a curl to example.com"
+          if ! sudo jq -e '[.connections[]? | select(.comm == "curl" and .dport == 443)] | length >= 1' \
+              "${out}/report.json" >/dev/null; then
+            echo "::error::the eBPF network probe did not record the curl connection to port 443"
+            sudo jq -c '.connections' "${out}/report.json" || true
             exit 1
           fi
-          echo "eBPF probes loaded and recorded ${n} connection(s)."
+          echo "eBPF probes loaded and recorded the curl connection."
       - name: Verify module checksums
         run: go mod verify
       # govulncheck is NOT run here: it is a dedicated, required job in
