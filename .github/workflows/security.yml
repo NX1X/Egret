@@ -3,6 +3,11 @@
 
 name: Security
 
+# NO `paths-ignore` here, deliberately: `zizmor (workflow lint)`, `govulncheck`,
+# `CodeQL (Go, security-extended)` and `Dependency Review` are REQUIRED status
+# checks in the `main branch protection` ruleset. A path filter makes a skipped
+# workflow never report those contexts, leaving a docs-only PR permanently stuck
+# on "Expected". See the same note in ci.yml.
 on:
   push:
     branches: [main]
@@ -22,7 +27,8 @@ jobs:
   zizmor:
     name: zizmor (workflow lint)
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # ~0.3m observed.
+    timeout-minutes: 6
     permissions:
       contents: read
       security-events: write
@@ -32,7 +38,11 @@ jobs:
           persist-credentials: false
 
       - name: Install zizmor
-        run: pipx install zizmor
+        timeout-minutes: 4
+        # Pinned: an unpinned installer in the security workflow is both an
+        # unreviewed supply-chain input and a source of findings that appear or
+        # vanish between runs with no repo change. Renovate bumps this.
+        run: pipx install zizmor==1.28.0
 
       - name: Run zizmor
         # zizmor exits non-zero when it FINDS issues - those still surface via the
@@ -58,8 +68,14 @@ jobs:
 
   scorecard:
     name: OpenSSF Scorecard
+    # Scorecard grades the REPOSITORY, not a diff: on a pull_request the score is
+    # meaningless and `publish_results` can't publish anyway (publishing requires a
+    # default-branch run). Restricting it to the default branch + the weekly
+    # schedule drops a job from every PR without losing any signal.
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # ~0.3m observed.
+    timeout-minutes: 10
     permissions:
       contents: read
       security-events: write
@@ -70,7 +86,8 @@ jobs:
           persist-credentials: false
 
       - name: Run scorecard
-        uses: ossf/scorecard-action@62b2cac7ed8198b15735ed49ab1e5cf35480ba46 # v2.4.0
+        timeout-minutes: 8
+        uses: ossf/scorecard-action@fa7117db83c52d787ae5a89f350999701505d78e # v2.5.0
         with:
           results_file: results.sarif
           results_format: sarif
@@ -85,7 +102,8 @@ jobs:
     name: Dependency Review
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # ~0.1m observed.
+    timeout-minutes: 6
     permissions:
       contents: read
       pull-requests: read
@@ -94,33 +112,54 @@ jobs:
         with:
           persist-credentials: false
       - name: Dependency Review
+        timeout-minutes: 4
         uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
         with:
           fail-on-severity: moderate
 
+  # The ONLY govulncheck run in the repo. It used to be duplicated as a step in
+  # ci.yml's `ebpf` job, which scanned the same commit twice and rebuilt the tool
+  # from source twice on every push and PR.
   govulncheck:
     name: govulncheck
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # ~0.5m observed (most of it building the tool on a cache miss).
+    timeout-minutes: 8
     permissions:
       contents: read
+    env:
+      GOVULNCHECK_VERSION: v1.6.0
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        timeout-minutes: 5
         with:
-          go-version: "1.26.5"
+          go-version: "1.26.9"
+
+      # Built from source every run, deliberately NOT cached. Caching the binary
+      # would save ~25s, but this is the scanner that gates the merge: a cache is
+      # writable by any run on the same ref, so a restored `govulncheck` that
+      # reports "no vulnerabilities" is a strictly worse failure than a slow one.
+      # Same reasoning as the `cache: false` on the release trust path. `go install`
+      # at a pinned version is checksum-verified through the Go module proxy.
+      # The duplicate run in ci.yml is gone, which is where the real time went.
+      - name: Install govulncheck
+        timeout-minutes: 5
+        run: go install "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}"
+
       - name: Run govulncheck
         # Fails CI on known-vulnerable dependencies (see docs/DEPENDENCIES.md).
-        run: |
-          go install golang.org/x/vuln/cmd/govulncheck@v1.6.0
-          "$(go env GOPATH)/bin/govulncheck" ./...
+        timeout-minutes: 6
+        run: '"$(go env GOPATH)/bin/govulncheck" ./...'
 
   codeql:
     name: CodeQL (Go, security-extended)
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # ~1.3m observed - the longest job in the repo. 12m leaves room for a cold
+    # CodeQL bundle download and a slow autobuild without waiting out 20m on a hang.
+    timeout-minutes: 12
     permissions:
       contents: read
       security-events: write
@@ -132,14 +171,17 @@ jobs:
       # Build cross-platform packages so CodeQL analyses the non-Linux build
       # paths without needing clang / eBPF codegen on the runner.
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        timeout-minutes: 5
         with:
-          go-version: "1.26.5"
+          go-version: "1.26.9"
 
       - name: Initialize CodeQL
+        timeout-minutes: 6
         uses: github/codeql-action/init@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2
         with:
           languages: go
           queries: security-extended
 
       - name: Analyze
+        timeout-minutes: 10
         uses: github/codeql-action/analyze@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2

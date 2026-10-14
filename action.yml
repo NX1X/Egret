@@ -65,7 +65,7 @@ inputs:
     required: false
     default: ""
   github-token:
-    description: "Token for the App-only publish features below (check-run, PR comment, dashboard issue). Pass a GitHub App installation token (via actions/create-github-app-token) for org-wide policy + branded 'egret[bot]' identity, or the built-in GITHUB_TOKEN for the default scope. Sent only as an Authorization header, never on a command line. Empty = no GitHub publishing."
+    description: "Token for the App-only publish features below (check-run, PR comment, dashboard issue), and for authenticating the `version: latest` release lookup (the unauthenticated GitHub API is rate-limited per runner IP). Pass a GitHub App installation token (via actions/create-github-app-token) for org-wide policy + branded 'egret[bot]' identity, or the built-in GITHUB_TOKEN for the default scope. Sent only as an Authorization header, never on a command line, and removed from the wrapped command's environment. NOTE: that is hardening, not isolation - your command runs as root and can read this process's environment via /proc, so pass the least-privileged token that works. Empty = no GitHub publishing."
     required: false
     default: ""
   check-run:
@@ -101,6 +101,12 @@ runs:
         EGRET_VERSION: ${{ inputs.version }}
         EGRET_ALLOW_BUILD_FROM_SOURCE: ${{ inputs.allow-build-from-source }}
         EGRET_REQUIRE_SIGNATURE: ${{ inputs.require-signature }}
+        # Only used to authenticate the `version: latest` release lookup against
+        # api.github.com (the unauthenticated API is 60 req/hour per runner IP,
+        # shared across every job on it). Sent as an Authorization header via
+        # curl's stdin config - never on a command line - and only to
+        # api.github.com; the asset download itself stays unauthenticated.
+        EGRET_GITHUB_TOKEN: ${{ inputs.github-token }}
       # Use the GITHUB_ACTION_PATH env var rather than interpolating
       # ${{ github.action_path }} into the run: script, matching the "inputs via
       # env, never into run:" discipline used by the run step below.

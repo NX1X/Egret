@@ -1,5 +1,11 @@
 name: CI
 
+# NO `paths-ignore` here, deliberately: `unit` and `ebpf` are REQUIRED status
+# checks in the `main branch protection` ruleset. A path filter makes a skipped
+# workflow never report those contexts, so a docs-only PR would sit "Expected"
+# forever and be unmergeable. If you want to skip docs-only runs, the required
+# checks must be satisfied some other way (a same-named companion job), not by
+# adding a filter here.
 on:
   push:
     branches: [main]
@@ -20,18 +26,25 @@ jobs:
   # //go:build linux file, so this needs no eBPF codegen or kernel.
   unit:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # ~1m observed. Sized for a cold module/build cache plus slack, not 15x the
+    # real runtime: an over-long timeout just means a hung job wastes more
+    # wall-clock before anyone learns it is stuck.
+    timeout-minutes: 8
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        timeout-minutes: 5
         with:
-          go-version: "1.26.5"
-      - run: go mod download
+          go-version: "1.26.9"
+      # No explicit `go mod download`: setup-go restores the module cache and the
+      # build/test steps below fetch whatever is still missing. (The `ebpf` job
+      # does keep it - see the note there.)
       - name: Format check
         run: test -z "$(gofmt -l .)" || (gofmt -l . && exit 1)
       - name: Cross-platform compile (excludes eBPF-tagged files)
+        timeout-minutes: 5
         run: |
           GOOS=darwin  GOARCH=arm64 go build ./...
           GOOS=windows GOARCH=amd64 go build ./...
@@ -41,12 +54,24 @@ jobs:
       # the egress/exec/file behaviour of the toolchain + dependency code during the
       # tests, and never blocks CI). These are the pure packages (no eBPF collector),
       # so Egret's own eBPF load is the only one in play - no nesting.
+      # This IS the pure packages' only test run - the `ebpf` job now tests only
+      # the complement (see `make test-linux-only`), so the two jobs no longer
+      # execute the same tests twice per commit.
       - name: Test with coverage (guarded by Egret, audit)
+        timeout-minutes: 6
         uses: ./
         with:
           version: latest
           mode: audit
           upload-sarif: "false"
+          # Authenticates the `version: latest` release lookup so a runner-IP API
+          # rate limit can't turn into a spurious install failure. Safe HERE, and
+          # not in selftest.yml's monitor job, because this workflow's only grant is
+          # `contents: read` (top of file) - on a public repo that conveys nothing an
+          # anonymous request doesn't already have. The wrapped `go test` runs as
+          # root and can read the parent's environ via /proc, so only ever pass a
+          # token whose scope you would accept leaking to your dependency tree.
+          github-token: ${{ github.token }}
           command: |
             go test -coverprofile=coverage.out \
               ./internal/policy/... ./internal/report/... ./internal/audit/... \
@@ -60,25 +85,58 @@ jobs:
   # kernel ships no matching bpftool to dump the CO-RE vmlinux.h).
   ebpf:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # ~0.6m observed; sized for a cold cache, not 25x the real runtime.
+    timeout-minutes: 8
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        timeout-minutes: 5
         with:
-          go-version: "1.26.5"
+          go-version: "1.26.9"
+      # Kept here (unlike in `unit`): `go mod verify` below only checks modules
+      # that are actually IN the download cache, so it would pass vacuously if
+      # nothing had been fetched yet.
       - run: go mod download
+        timeout-minutes: 5
       - name: Build (from committed eBPF bindings)
         run: make build
-      - name: Test (full tree, incl. cli/collector - needs generated bindings)
-        run: go test ./...
+      # Only the packages that need the generated bindings. The pure packages are
+      # tested (with coverage, under Egret) in the `unit` job; running `go test
+      # ./...` here re-ran all of them a second time on the same commit. The list
+      # is computed as ./... minus PURE_PKGS, so a new package is picked up here
+      # automatically rather than being dropped from CI.
+      - name: Test (eBPF-dependent packages - complement of the unit job)
+        run: make test-linux-only
       - name: Smoke test
         run: ./bin/egret version
+      # Load the eBPF probes from THIS commit's build into the runner's real kernel
+      # and monitor one command. Every other check in this workflow only proves the
+      # code compiles and its unprivileged tests pass, and the action self-test
+      # downloads the PUBLISHED release. So a change that breaks probe loading (for
+      # example a cilium/ebpf bump) would otherwise first fail for users, after the
+      # release. Hosted runners grant passwordless sudo, which eBPF and nftables need.
+      # The assertion names the curl process and port. The probe has no cgroup
+      # filter, so a bare connection count could pass on the runner agent's own
+      # traffic without the probe ever seeing this command.
+      - name: Smoke test - load eBPF probes and monitor a command (audit)
+        timeout-minutes: 3
+        shell: bash
+        run: |
+          out="${RUNNER_TEMP}/egret-smoke"
+          sudo ./bin/egret run --mode audit --output-dir "${out}" -- \
+            curl -fsS --connect-timeout 10 --max-time 30 https://example.com -o /dev/null
+          sudo test -s "${out}/report.json" || { echo "::error::egret wrote no report.json"; exit 1; }
+          if ! sudo jq -e '[.connections[]? | select(.comm == "curl" and .dport == 443)] | length >= 1' \
+              "${out}/report.json" >/dev/null; then
+            echo "::error::the eBPF network probe did not record the curl connection to port 443"
+            sudo jq -c '.connections' "${out}/report.json" || true
+            exit 1
+          fi
+          echo "eBPF probes loaded and recorded the curl connection."
       - name: Verify module checksums
         run: go mod verify
-      - name: Vulnerability scan (govulncheck)
-        # Per docs/DEPENDENCIES.md: fail CI on known-vulnerable dependencies.
-        run: |
-          go install golang.org/x/vuln/cmd/govulncheck@v1.6.0
-          "$(go env GOPATH)/bin/govulncheck" ./...
+      # govulncheck is NOT run here: it is a dedicated, required job in
+      # security.yml. Running it in both workflows scanned the same commit twice
+      # and rebuilt the tool from source twice per event.

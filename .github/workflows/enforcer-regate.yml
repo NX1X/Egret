@@ -10,9 +10,22 @@
 # off once the expected outcome is confirmed, to make it a hard gate.
 name: enforcer-regate
 
+# The `push:` trigger previously had path filters but NO branch filter, so it
+# matched every branch AND every tag - it fired on release tags, on the floating
+# `v0` major tag, and on every renovate branch, in addition to the PR those
+# branches already had open. Since the job is informative (continue-on-error), all
+# of those runs produced nothing actionable. Now: pre-merge signal on the PR, where
+# it is reviewed, plus a post-merge run on main. No tag runs, no branch/PR double-fire.
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - "internal/enforcer/**"
+      - "internal/cli/**"
+      - "internal/bpf/**"
+      - "scripts/validate-block-mode*.sh"
   push:
+    branches: [main]
     paths:
       - "internal/enforcer/**"
       - "internal/cli/**"
@@ -28,14 +41,21 @@ concurrency:
 
 jobs:
   regate-namespaced:
+    # SAME-REPO pull requests only. This job builds and RUNS the checked-out
+    # revision inside a `--privileged` container; the old `push` trigger could only
+    # ever be fired by someone with write access, and adding `pull_request` must not
+    # quietly extend privileged execution to arbitrary fork PRs. Same guard as the
+    # app-token job in selftest.yml.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # ~0.9m observed.
+    timeout-minutes: 10
     # Steps run INSIDE this container (own cgroup namespace = the F-C topology).
     # --privileged grants CAP_BPF + nftables; the cgroup ns is still the container's.
     container:
       # Digest-pinned; Renovate maintains. Bumped to Go 1.26 to match the rest of
-      # the repo (go.mod go1.26.5).
-      image: golang:1.26-bookworm@sha256:1ecb7edf62a0408027bd5729dfd6b1b8766e578e8df93995b225dfd0944eb651
+      # the repo (go.mod go1.26.9).
+      image: golang:1.26.9-bookworm@sha256:d9c68c2c51161e12fd77e4c6320687c9cd86e1af1e3ad6e6cd63ff970641453c
       options: --privileged
     continue-on-error: true # informative until the expected outcome is confirmed
     steps:
@@ -43,10 +63,18 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install eBPF + nft toolchain
+      # Only nftables is actually needed at RUNTIME: the enforcer shells out to
+      # `nft` (internal/enforcer/firewall_linux.go), and everything else is pure
+      # Go - eBPF goes through github.com/cilium/ebpf with CO-RE off
+      # /sys/kernel/btf, and the build below uses the COMMITTED bpf2go bindings,
+      # so no codegen happens here. clang, llvm and libbpf-dev were the heaviest
+      # part of this install and nothing in the job invoked them. curl and
+      # ca-certificates already ship in the golang:*-bookworm image.
+      - name: Install nftables (enforcer runtime dependency)
+        timeout-minutes: 5
         run: |
           apt-get update
-          apt-get install -y --no-install-recommends clang llvm libbpf-dev nftables curl ca-certificates
+          apt-get install -y --no-install-recommends nftables
           useradd -u 1000 -m builduser || true
 
       - name: Check kernel BTF is reachable

@@ -4,20 +4,49 @@
 # released binary, load eBPF, monitor a command, emit report + SARIF.
 name: Action self-test
 
+# Safe to filter here (unlike ci.yml / security.yml): none of this workflow's jobs
+# is a required status check, so a skipped run can't wedge a PR on a check that
+# never reports. A docs-only change cannot affect whether the action installs and
+# runs. The two lists are duplicated rather than shared via a YAML anchor - the
+# Actions workflow parser does not support anchors/aliases.
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "docs-internal/**"
+      - "branding/**"
+      - "LICENSE"
+      - "NOTICE"
+      - ".github/ISSUE_TEMPLATE/**"
   pull_request:
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "docs-internal/**"
+      - "branding/**"
+      - "LICENSE"
+      - "NOTICE"
+      - ".github/ISSUE_TEMPLATE/**"
   workflow_dispatch:
 
 permissions:
   contents: read
 
+# Was missing entirely (ci.yml, security.yml and enforcer-regate.yml all had it):
+# a rapid push series to a PR piled up parallel self-test runs, each downloading
+# and checksum-verifying the release binary and loading eBPF.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   monitor:
     name: Egret guards its own build (audit)
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # ~0.3m observed.
+    timeout-minutes: 8
     permissions:
       contents: read
       security-events: write   # upload the SARIF to Code Scanning
@@ -28,13 +57,20 @@ jobs:
 
       - name: Run Egret over a sample command
         id: egret
+        timeout-minutes: 6
         uses: ./
         with:
           version: latest          # download + verify the newest released binary
           mode: audit
+          # Deliberately NO github-token. This job grants `security-events: write`,
+          # and the token would sit in the environment of the step that runs a
+          # command as root - the entrypoint strips it from the child, but a root
+          # build can still read the parent's /proc/<pid>/environ. Rate-limit
+          # avoidance is not worth handing a Code-Scanning-write token to a step
+          # that executes a build; this job is far too low-volume to hit 60/hr.
           command: |
             echo "guarded build step"
-            curl -fsS https://example.com -o /dev/null
+            curl -fsS --connect-timeout 10 --max-time 30 https://example.com -o /dev/null
 
       - name: Assert the action produced a report + outputs
         env:
@@ -55,7 +91,8 @@ jobs:
     # Manual, or on a SAME-REPO pull request (fork PRs can't read the App secrets).
     if: github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # ~0.3m observed.
+    timeout-minutes: 8
     permissions:
       contents: read
       security-events: write   # upload SARIF (the PR path exercises the full experience)
@@ -66,6 +103,7 @@ jobs:
 
       - name: Mint Egret App installation token
         id: app-token
+        timeout-minutes: 4
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           app-id: ${{ secrets.EGRET_APP_ID }}
@@ -78,6 +116,7 @@ jobs:
           permission-contents: read
 
       - name: Run Egret + publish results via the App token
+        timeout-minutes: 6
         uses: ./
         with:
           version: latest
@@ -88,7 +127,7 @@ jobs:
           dashboard-issue: true
           command: |
             echo "app-token test build"
-            curl -fsS https://example.com -o /dev/null
+            curl -fsS --connect-timeout 10 --max-time 30 https://example.com -o /dev/null
 
   # Block mode: prove the enforcer actually confines egress on a real runner.
   # Manual (workflow_dispatch) because block mode may not confine on hosted runners
@@ -97,7 +136,7 @@ jobs:
     name: Egret enforces block mode (disallowed egress blocked)
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 8
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
@@ -117,6 +156,7 @@ jobs:
       - name: Run a build hitting an allowed + a disallowed endpoint
         id: egret
         continue-on-error: true   # we assert on the outcome ourselves
+        timeout-minutes: 6
         uses: ./
         with:
           version: latest

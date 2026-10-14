@@ -157,6 +157,45 @@ When `github-token` is not provided, Egret falls back to the default
 PRs, branded identity). **Nothing about the App is required** - it is pure
 enhancement, per the roadmap invariant.
 
+### What the token is used for, and where it is not visible
+
+Besides the publish features, `github-token` authenticates the `version: latest`
+release lookup against `api.github.com`. The unauthenticated GitHub API allows 60
+requests/hour per source IP, shared with every other Actions job on that runner,
+so passing `${{ github.token }}` is worth it even with all publishing left off -
+it turns a possible rate-limited install failure into a normal one.
+
+The token is handled defensively:
+
+- It is sent as an `Authorization` header through curl's stdin config file, never
+  as an argv element, so it does not appear in `ps` or `/proc/<pid>/cmdline`.
+- It is validated against the GitHub token alphabet (`[A-Za-z0-9_.-]`) before use.
+  curl's config format is an option grammar, not a header string, so a value
+  containing a quote and a newline could otherwise inject arbitrary curl directives.
+- It is sent **only** to `api.github.com`. The asset download is unauthenticated,
+  and curl uses `--location` (not `--location-trusted`), so the header is dropped
+  if the API ever redirects to another host.
+- Egret does **not** fall back to an ambient `GITHUB_TOKEN`. It uses only the
+  credential you passed to this input.
+- It is **removed from the wrapped command's environment** before your build runs.
+  Egret runs your build under `sudo -E`, which would otherwise hand the whole step
+  environment - including an App installation token with `checks`/`issues`/
+  `pull-requests` write - to the third-party toolchain and dependency code that
+  Egret exists to watch.
+
+> **This is hardening, not isolation.** The last point removes the token from the
+> build's *own* environment, which defeats the common case of dependency code
+> reading `process.env`. It does **not** put the token out of reach: your build runs
+> as **root**, the action's own process is still alive holding the value, and root
+> can read `/proc/<pid>/environ` regardless of `ptrace_scope`.
+>
+> Assume any token you pass to Egret is reachable by the code Egret runs, and pass
+> the least-privileged one that works. If you only want the release lookup
+> authenticated, `${{ github.token }}` with the job's `permissions:` narrowed is a
+> much better choice than an App installation token with write grants. A
+> caller-exported `GITHUB_TOKEN` is deliberately left in place (builds commonly need
+> it for `gh`), so it is subject to the same caveat.
+
 ---
 
 ## 4. Later: distribution & the server
