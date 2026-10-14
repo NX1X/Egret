@@ -72,7 +72,8 @@ remaining work is on the agent:
 
 - **Block mode as a confinement boundary on every CI platform** - finish validating
   it on GitHub-hosted `container:` / cgroup-namespaced runners (the self-probe already
-  fails closed if it can't confirm confinement), and pin the build's resolver.
+  fails closed if it can't confirm confinement). The build's resolver is pinned to
+  Egret's DNS proxy since #24.
 - **Kernel coverage** - verify the eBPF probes across ≥2 kernel versions.
 - **Whole-job tracing** - trace every step transparently, without wrapping a
   `command`.

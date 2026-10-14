@@ -37,11 +37,14 @@ type buildCgroup struct {
 // v2-root-level cgroup (simple, level 1); falls back to a child of Egret's own
 // cgroup when the root is not writable (delegated/containerized). Requires cgroup
 // v2 and root - both hold when block mode is active.
-func newBuildCgroup() (*buildCgroup, error) {
+//
+// runID makes the name unique per run. A pid is not enough: two Egret runs in
+// different pid namespaces (privileged containers) can share one cgroup tree.
+func newBuildCgroup(runID string) (*buildCgroup, error) {
 	if _, err := os.Stat(filepath.Join(cgroupRoot, "cgroup.controllers")); err != nil {
 		return nil, fmt.Errorf("cgroup v2 unified hierarchy not found at %s (block mode needs it): %w", cgroupRoot, err)
 	}
-	name := fmt.Sprintf("egret-run-%d", os.Getpid())
+	name := "egret-run-" + runID
 
 	candidates := []string{name} // v2-root level 1
 	if own := ownCgroupRelPath(); own != "" {
@@ -51,7 +54,9 @@ func newBuildCgroup() (*buildCgroup, error) {
 	var lastErr error
 	for _, rel := range candidates {
 		abs := filepath.Join(cgroupRoot, rel)
-		if err := os.MkdirAll(abs, 0o755); err != nil {
+		// Mkdir, not MkdirAll: the parent exists, and an existing directory must
+		// be an error, never a cgroup shared with another run.
+		if err := os.Mkdir(abs, 0o755); err != nil {
 			lastErr = err
 			continue
 		}

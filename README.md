@@ -191,7 +191,11 @@ The agent decodes eBPF ring-buffer events (`internal/collector`), evaluates them
 against the policy (`internal/policy`), enforces egress via a DNS proxy +
 nftables (`internal/enforcer`), and writes reports (`internal/report`). Domain-based
 egress: an allowlisted name is resolved through Egret's DNS proxy, the resolved IPs
-are added to an nftables allow-set, and everything else is default-denied.
+are added to an nftables allow-set, and everything else is default-denied. The
+build sees a private `/etc/resolv.conf` that names the proxy (a per-run
+`127.53.x.y` address), set up in its own mount namespace, so it cannot resolve
+around the proxy through systemd-resolved. In block mode, DNS to any other
+loopback address is dropped.
 
 ### Repo layout
 

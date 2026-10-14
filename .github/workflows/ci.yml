@@ -140,3 +140,27 @@ jobs:
       # govulncheck is NOT run here: it is a dedicated, required job in
       # security.yml. Running it in both workflows scanned the same commit twice
       # and rebuilt the tool from source twice per event.
+
+  # DNS correlation and loopback DNS confinement on a real GitHub-hosted runner.
+  # These runners resolve through systemd-resolved (127.0.0.53), which a unit
+  # test cannot reproduce. The script checks that audit and block mode label
+  # connections by domain, that the build cannot query the resolved stub
+  # directly, that other loopback traffic still works, and that two block runs
+  # at the same time do not undo each other's filter.
+  dns-e2e:
+    name: DNS correlation + block mode e2e (hosted runner)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        timeout-minutes: 5
+        with:
+          go-version: "1.26.9"
+      - name: Build (from committed eBPF bindings)
+        run: make build
+      - name: DNS end-to-end checks
+        timeout-minutes: 6
+        run: ./scripts/e2e-dns.sh ./bin/egret

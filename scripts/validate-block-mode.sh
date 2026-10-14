@@ -42,7 +42,8 @@ echo "  escape attempt 1 - move self out of the cgroup:"
 { echo $$ > /sys/fs/cgroup/cgroup.procs; } 2>&1 | sed 's/^/    /'; echo "    -> rc=${PIPESTATUS[0]} (expect NON-zero: denied)"
 echo "  escape attempt 2 - flush nft:"
 nft flush ruleset 2>&1 | sed 's/^/    /'; echo "    -> rc=${PIPESTATUS[0]} (expect NON-zero: denied, no CAP_NET_ADMIN)"
-IP=$(dig +short @127.0.0.1 example.com A | grep -E '^[0-9]' | head -1)
+# No @server: the build's resolv.conf is pinned to Egret's per-run proxy.
+IP=$(dig +short example.com A | grep -E '^[0-9]' | head -1)
 echo "  proxy-resolved example.com -> ${IP:-<none>} (non-empty: #3 upstream works)"
 echo "  allowlisted example.com:"
 [ -n "$IP" ] && curl -sS --max-time 8 --resolve example.com:443:$IP -o /dev/null -w "    -> HTTP %{http_code} (expect 200)\n" https://example.com
@@ -76,7 +77,7 @@ fi
 echo "=== block-mode validation ==="
 ./bin/egret run --mode block --config /tmp/egret-block-pol.yaml -- bash /tmp/egret-block-build.sh
 echo "=== teardown clean? ==="
-nft list table inet egret >/dev/null 2>&1 && echo "  LEFTOVER nft table (BAD)" || echo "  no egret nft table (clean)"
+nft list tables 2>/dev/null | grep -q 'inet egret' && echo "  LEFTOVER nft table (BAD)" || echo "  no egret nft table (clean)"
 ls -d /sys/fs/cgroup/egret-run-* 2>/dev/null && echo "  LEFTOVER cgroup (BAD)" || echo "  no leftover cgroup (clean)"
 
 # F-E - a process the build spawns that outlives the monitored command must be
