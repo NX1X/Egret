@@ -3,6 +3,19 @@
 Notable changes to Egret, following [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed (upgrade impact)
+
+- **A policy's `mode: block` is now honored by the action.** The action's `mode`
+  input defaulted to `audit` and was always passed to Egret, so it silently
+  overrode a policy that said `mode: block`: you believed egress was enforced while
+  the run only observed it. The input now defaults to empty, and `--mode` is passed
+  only when you set it. **If your policy says `block`, your builds are now really
+  enforced and may fail on egress your allowlist does not cover.** To keep the old
+  behavior while you fix the allowlist, set `mode: audit` explicitly. An unknown
+  `mode` value (anything but `audit` or `block`) now fails with a clear error.
+
 ## [0.3.0] - Install robustness, block-mode report integrity, CI cost work
 
 ### Fixed
@@ -303,7 +316,6 @@ generation - shipped as a CLI and a GitHub Action, with no server and no phone-h
 - **Hardened by default:** no phone-home; egress/event records are metadata only
   (never payloads); block mode is fail-closed on teardown.
 
-[0.3.0]: https://github.com/NX1X/Egret/releases/tag/v0.3.0
 [0.3.0]: https://github.com/NX1X/Egret/releases/tag/v0.3.0
 [0.2.0]: https://github.com/NX1X/Egret/releases/tag/v0.2.0
 [0.1.3]: https://github.com/NX1X/Egret/releases/tag/v0.1.3

@@ -125,7 +125,7 @@ several steps.
 |---|---|---|
 | `command` | `""` | command to run under Egret (empty = install only) |
 | `policy` | `""` | path to `policy.yaml` (audit-mode defaults if unset) |
-| `mode` | `audit` | `audit` or `block` |
+| `mode` | _(empty)_ | Override the policy's mode: `audit` or `block`. Empty uses the policy's own mode (`audit` when there is no policy). |
 | `sarif` / `upload-sarif` | `true` | produce SARIF / upload it to Code Scanning |
 | `fail-on-violations` | `false` | fail the job if any policy violation is recorded |
 | `version` | `latest` | Egret release to install |

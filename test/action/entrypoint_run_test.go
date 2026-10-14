@@ -38,6 +38,7 @@ const fakeEgret = `#!/usr/bin/env bash
 sub="$1"; shift
 case "$sub" in
   run)
+    if [[ -n "${FAKE_ARGS_LOG:-}" ]]; then printf '%s\n' "$@" > "${FAKE_ARGS_LOG}"; fi
     out=""
     while [[ $# -gt 0 ]]; do
       case "$1" in --output-dir) out="$2"; shift 2 ;; --) shift; break ;; *) shift ;; esac
@@ -202,5 +203,40 @@ func TestRunDoesNotPassTheGitHubTokenToTheBuild(t *testing.T) {
 	}
 	if strings.Contains(string(b), "ghs_secret_value") {
 		t.Error("the run (and so the wrapped build) received the GitHub token")
+	}
+}
+
+// Regression: the action defaulted mode to audit and always passed --mode, which
+// silently overrode a policy's `mode: block`. With the input empty, no --mode may
+// be passed, so the policy decides.
+func TestRunLetsThePolicyDecideTheModeByDefault(t *testing.T) {
+	e := newRunEnv(t)
+	argsLog := filepath.Join(e.dir, "args")
+	if out, code := e.run(t, "EGRET_MODE=", "FAKE_ARGS_LOG="+argsLog); code != 0 {
+		t.Fatalf("exit %d:\n%s", code, out)
+	}
+	b, _ := os.ReadFile(argsLog)
+	if strings.Contains(string(b), "--mode") {
+		t.Errorf("--mode was passed although the input was empty:\n%s", b)
+	}
+}
+
+func TestRunPassesAnExplicitMode(t *testing.T) {
+	e := newRunEnv(t)
+	argsLog := filepath.Join(e.dir, "args")
+	if out, code := e.run(t, "EGRET_MODE=block", "FAKE_ARGS_LOG="+argsLog); code != 0 {
+		t.Fatalf("exit %d:\n%s", code, out)
+	}
+	b, _ := os.ReadFile(argsLog)
+	if !strings.Contains(string(b), "--mode\nblock\n") {
+		t.Errorf("--mode block not passed:\n%s", b)
+	}
+}
+
+func TestRunRejectsAnUnknownMode(t *testing.T) {
+	e := newRunEnv(t)
+	out, code := e.run(t, "EGRET_MODE=enforce")
+	if code == 0 || !strings.Contains(out, "mode must be audit or block") {
+		t.Errorf("exit %d, want a clear rejection:\n%s", code, out)
 	}
 }
