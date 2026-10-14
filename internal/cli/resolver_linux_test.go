@@ -36,6 +36,9 @@ sortlist 10.0.0.0/8
 }
 
 func TestWriteRunResolvConf(t *testing.T) {
+	old := runFileBase
+	runFileBase = t.TempDir()
+	t.Cleanup(func() { runFileBase = old })
 	path, cleanup, err := writeRunResolvConf("127.53.1.2:53")
 	if err != nil {
 		t.Fatalf("writeRunResolvConf: %v", err)

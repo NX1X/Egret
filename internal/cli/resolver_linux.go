@@ -22,6 +22,8 @@ import (
 //   - /run/systemd/resolve is covered by an empty tmpfs, so the build cannot
 //     reach systemd-resolved through its varlink socket (nss-resolve) and the
 //     stub-resolv.conf symlink target also names the proxy.
+//   - /run/nscd is covered the same way. glibc asks nscd before it reads
+//     resolv.conf, and a host nscd resolves any name.
 //
 // Without this, a GitHub-hosted runner resolves through systemd-resolved at
 // 127.0.0.53, the proxy sees no query, every connection is reported as raw-IP
@@ -31,11 +33,20 @@ import (
 //
 // D-Bus is left alone (decided 2026-10-14): a tool that calls resolved over
 // the system bus (resolvectl) still bypasses the proxy. Block mode's
-// default-deny still stops the connection to a name the proxy never resolved.
+// default-deny still stops the connection to a name the proxy never resolved,
+// but the query itself can carry data out (a known residual). So can a
+// connect() to resolved's socket through /proc/<pid>/root of a same-uid
+// process outside the namespace.
+
+// runFileBase is where the per-run resolv.conf is written: root-owned and not
+// writable by the build user. Not $TMPDIR, which a caller may point into a
+// directory a same-uid process controls. A var so tests can use a temp dir.
+var runFileBase = "/run"
 
 const (
 	etcResolvConf   = "/etc/resolv.conf"
 	resolvedRunDir  = "/run/systemd/resolve"
+	nscdRunDir      = "/run/nscd"
 	resolvConfFlag  = "resolv-conf"
 	execPinnedName  = "__exec-pinned"
 	resolvConfLabel = "# Written by Egret for this run: every DNS query goes to Egret's proxy.\n"
@@ -86,7 +97,7 @@ func writeRunResolvConf(dnsAddr string) (string, func(), error) {
 	} else {
 		content = buildResolvConf(nil, host)
 	}
-	dir, err := os.MkdirTemp("", "egret-dns-")
+	dir, err := os.MkdirTemp(runFileBase, "egret-dns-")
 	if err != nil {
 		return "", nil, err
 	}
@@ -121,6 +132,11 @@ func pinResolver(resolvConf string) error {
 	if self == parent {
 		return fmt.Errorf("not in a private mount namespace (%s); refusing to change mounts", self)
 	}
+	// Also compare with pid 1, in case the parent is gone and this process was
+	// reparented. Egret never runs as pid 1 of the namespace it guards.
+	if init, err := os.Readlink("/proc/1/ns/mnt"); err != nil || init == self {
+		return fmt.Errorf("cannot confirm a private mount namespace (%s); refusing to change mounts", self)
+	}
 
 	content, err := os.ReadFile(resolvConf)
 	if err != nil {
@@ -140,6 +156,13 @@ func pinResolver(resolvConf string) error {
 			if err := os.WriteFile(filepath.Join(resolvedRunDir, name), content, 0o644); err != nil {
 				return fmt.Errorf("writing %s: %w", name, err)
 			}
+		}
+	}
+
+	if fi, err := os.Lstat(nscdRunDir); err == nil && fi.IsDir() {
+		if err := unix.Mount("tmpfs", nscdRunDir, "tmpfs",
+			unix.MS_NOSUID|unix.MS_NODEV|unix.MS_NOEXEC, "mode=0755,size=16k"); err != nil {
+			return fmt.Errorf("covering %s: %w", nscdRunDir, err)
 		}
 	}
 

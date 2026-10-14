@@ -7,12 +7,24 @@ import (
 	"testing"
 )
 
-func TestTableNameIsPerRun(t *testing.T) {
-	if tableName(42) == tableName(43) {
-		t.Fatal("two runs share an nft table name")
+func TestRunIDIsRandom(t *testing.T) {
+	seen := map[string]bool{}
+	for i := 0; i < 100; i++ {
+		id, err := newRunID()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(id) != 16 || strings.Trim(id, "0123456789abcdef") != "" {
+			t.Fatalf("newRunID() = %q, want 16 hex characters", id)
+		}
+		seen[id] = true
 	}
-	if got := tableName(42); got != "egret_42" {
-		t.Errorf("tableName(42) = %q, want egret_42", got)
+	// Not derived from the pid: every draw differs.
+	if len(seen) != 100 {
+		t.Errorf("only %d distinct run ids in 100 draws", len(seen))
+	}
+	if got := tableName("ab12"); got != "egret_ab12" {
+		t.Errorf("tableName = %q, want egret_ab12", got)
 	}
 }
 
@@ -21,8 +33,8 @@ func TestDNSRules(t *testing.T) {
 	if err != nil {
 		t.Fatalf("dnsRules: %v", err)
 	}
-	if len(rules) != 3 {
-		t.Fatalf("got %d rules, want 3: %q", len(rules), rules)
+	if len(rules) != 5 {
+		t.Fatalf("got %d rules, want 5: %q", len(rules), rules)
 	}
 	// Order is the security property: accept the proxy, drop all other DNS on
 	// loopback, and only then accept the rest of loopback.
@@ -32,10 +44,17 @@ func TestDNSRules(t *testing.T) {
 	if !strings.HasPrefix(rules[1], `oifname "lo" `) || !strings.HasSuffix(rules[1], "th dport 53 counter drop") {
 		t.Errorf("rule 1 = %q, want drop other loopback DNS", rules[1])
 	}
-	if rules[2] != `oifname "lo" accept` {
-		t.Errorf("rule 2 = %q, want loopback accept", rules[2])
+	// Docker's embedded DNS: the nat rule rewrites port 53 before this filter.
+	if !strings.Contains(rules[2], "ct original proto-dst 53") || !strings.HasSuffix(rules[2], "drop") {
+		t.Errorf("rule 2 = %q, want drop of NAT-rewritten DNS", rules[2])
 	}
-	for _, r := range rules[:2] {
+	if rules[3] != `oifname "lo" ip daddr 127.0.0.11 counter drop` {
+		t.Errorf("rule 3 = %q, want drop of Docker's embedded DNS address", rules[3])
+	}
+	if rules[4] != `oifname "lo" accept` {
+		t.Errorf("rule 4 = %q, want loopback accept last", rules[4])
+	}
+	for _, r := range rules[:3] {
 		if !strings.Contains(r, "meta l4proto { tcp, udp }") {
 			t.Errorf("rule %q must cover both TCP and UDP", r)
 		}

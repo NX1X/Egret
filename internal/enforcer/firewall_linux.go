@@ -4,9 +4,10 @@ package enforcer
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"net"
-	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -31,7 +32,7 @@ const selfProbeCanaryIP = "192.0.2.1"
 
 // nftFirewall enforces default-deny egress by shelling out to `nft` (a native
 // netlink library is a possible later optimization). It creates a dedicated
-// per-run inet table `egret_<pid>` with v4+v6 allow sets, so teardown is a
+// per-run inet table `egret_<run id>` with v4+v6 allow sets, so teardown is a
 // single table drop and a second Egret run on the same host never adds to, or
 // deletes, this run's rules.
 //
@@ -54,16 +55,39 @@ func newFirewall(pol *policy.Policy) (firewall, error) {
 	if _, err := exec.LookPath("nft"); err != nil {
 		return nil, fmt.Errorf("nft not found in PATH (install nftables): %w", err)
 	}
-	cg, err := newBuildCgroup()
+	runID, err := newRunID()
 	if err != nil {
 		return nil, err
 	}
-	return &nftFirewall{pol: pol, table: tableName(os.Getpid()), cg: cg}, nil
+	cg, err := newBuildCgroup(runID)
+	if err != nil {
+		return nil, err
+	}
+	return &nftFirewall{pol: pol, table: tableName(runID), cg: cg}, nil
 }
 
-// tableName is the per-run nft table. The pid matches the build cgroup's name
-// (egret-run-<pid>), so both are easy to tie to one run.
-func tableName(pid int) string { return fmt.Sprintf("egret_%d", pid) }
+// newRunID returns 16 random hex characters that name this run's nft table and
+// build cgroup. Not the pid: nft tables are per network namespace but pids are
+// per pid namespace, so two privileged host-network containers can both run
+// Egret as the same pid, and a shared table name would let one run delete the
+// other's live filter.
+func newRunID() (string, error) {
+	var b [8]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return "", fmt.Errorf("generating a run id: %w", err)
+	}
+	return hex.EncodeToString(b[:]), nil
+}
+
+// tableName is the per-run nft table. It shares the run id with the build
+// cgroup (egret-run-<id>), so both are easy to tie to one run.
+func tableName(runID string) string { return "egret_" + runID }
+
+// dockerDNSIP is Docker's embedded DNS server inside user-defined networks
+// (including GitHub `container:` jobs). Docker's nat OUTPUT rule rewrites
+// 127.0.0.11:53 to a random high port BEFORE this filter (priority 0) sees the
+// packet, so a port-53 match misses it. Nothing but DNS listens there.
+const dockerDNSIP = "127.0.0.11"
 
 // dnsRules returns the nft rules (after `add rule inet <table> output <scope> `)
 // that confine the build's DNS on loopback: DNS (UDP or TCP port 53) to the
@@ -85,6 +109,11 @@ func dnsRules(dnsAddr string) ([]string, error) {
 	return []string{
 		fmt.Sprintf("ip daddr %s meta l4proto { tcp, udp } th dport 53 accept", ip),
 		`oifname "lo" meta l4proto { tcp, udp } th dport 53 counter drop`,
+		// A DNS packet whose port was rewritten by a nat rule (Docker's embedded
+		// DNS) still carries port 53 in its original conntrack tuple.
+		`oifname "lo" meta l4proto { tcp, udp } ct original proto-dst 53 counter drop`,
+		// Docker's embedded DNS is also reachable on its high port directly.
+		fmt.Sprintf(`oifname "lo" ip daddr %s counter drop`, dockerDNSIP),
 		`oifname "lo" accept`,
 	}, nil
 }
@@ -117,30 +146,30 @@ func (f *nftFirewall) Setup(ctx context.Context, dnsAddr string) error {
 	// accept rules sit before `counter drop`, so an allowed-ips destination is
 	// permitted even with no DNS lookup.
 	//
-	// The script starts with add+delete of the table: a table with this name can
-	// only be left over from a dead run whose pid was reused, and its rules would
-	// match the wrong cgroup. Within one `nft -f` the whole script is atomic.
+	// `create table`, not `add table`: create fails if the table exists, so
+	// this run never adds rules to, or later deletes, a table it does not own.
+	// The rules are built from a list so their order stays in one place.
+	rules := append([]string{"ct state established,related accept"}, dns...)
+	rules = append(rules,
+		"ip daddr @allow4 accept",
+		"ip6 daddr @allow6 accept",
+		"ip daddr @allow4cidr accept",
+		"ip6 daddr @allow6cidr accept",
+		fmt.Sprintf("ip daddr %s counter name selfprobe drop", selfProbeCanaryIP),
+		"counter drop",
+	)
 	script := fmt.Sprintf(`
-add table inet %[1]s
-delete table inet %[1]s
-add table inet %[1]s
+create table inet %[1]s
 add set inet %[1]s allow4 { type ipv4_addr; flags timeout; size 4096; }
 add set inet %[1]s allow6 { type ipv6_addr; flags timeout; size 4096; }
 add set inet %[1]s allow4cidr { type ipv4_addr; flags interval; auto-merge; size 4096; }
 add set inet %[1]s allow6cidr { type ipv6_addr; flags interval; auto-merge; size 4096; }
 add counter inet %[1]s selfprobe
 add chain inet %[1]s output { type filter hook output priority 0; policy accept; }
-add rule inet %[1]s output %[2]s ct state established,related accept
-add rule inet %[1]s output %[2]s %[4]s
-add rule inet %[1]s output %[2]s %[5]s
-add rule inet %[1]s output %[2]s %[6]s
-add rule inet %[1]s output %[2]s ip daddr @allow4 accept
-add rule inet %[1]s output %[2]s ip6 daddr @allow6 accept
-add rule inet %[1]s output %[2]s ip daddr @allow4cidr accept
-add rule inet %[1]s output %[2]s ip6 daddr @allow6cidr accept
-add rule inet %[1]s output %[2]s ip daddr %[3]s counter name selfprobe drop
-add rule inet %[1]s output %[2]s counter drop
-`, f.table, sc, selfProbeCanaryIP, dns[0], dns[1], dns[2])
+`, f.table)
+	for _, r := range rules {
+		script += fmt.Sprintf("add rule inet %s output %s %s\n", f.table, sc, r)
+	}
 
 	// Populate the static CIDR sets from the policy's allowed-ips. A bad CIDR here
 	// would be caught at policy.Validate() long before this; each net stringifies to
