@@ -5,9 +5,20 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-These fixes matter in **block mode**, where the build runs as the ordinary runner
-user and Egret runs as root. In audit mode the build already runs as root, so
-audit mode is not a security boundary.
+### Changed (upgrade impact)
+
+- **A policy's `mode: block` is now honored by the action.** The action's `mode`
+  input defaulted to `audit` and was always passed to Egret, so it silently
+  overrode a policy that said `mode: block`: you believed egress was enforced while
+  the run only observed it. The input now defaults to empty, and `--mode` is passed
+  only when you set it. **If your policy says `block`, your builds are now really
+  enforced and may fail on egress your allowlist does not cover.** To keep the old
+  behavior while you fix the allowlist, set `mode: audit` explicitly. An unknown
+  `mode` value (anything but `audit` or `block`) now fails with a clear error.
+
+The security fixes below matter in **block mode**, where the build runs as the
+ordinary runner user and Egret runs as root. In audit mode the build already runs
+as root, so audit mode is not a security boundary.
 
 ### Security
 

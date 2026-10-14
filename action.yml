@@ -17,9 +17,9 @@ inputs:
     required: false
     default: ""
   mode:
-    description: "Override policy mode: audit | block."
+    description: "Override the policy's mode: audit | block. Empty (the default) uses the policy's own mode, or audit when there is no policy."
     required: false
-    default: "audit"
+    default: ""
   version:
     description: "Egret release tag to download (e.g. v0.1.0). 'latest' resolves the newest release."
     required: false
