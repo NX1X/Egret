@@ -3,6 +3,53 @@
 Notable changes to Egret, following [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+These fixes matter in **block mode**, where the build runs as the ordinary runner
+user and Egret runs as root. In audit mode the build already runs as root, so
+audit mode is not a security boundary.
+
+### Security
+
+- **Root no longer writes through symlinks the build planted.** Only the last
+  component of the report directory was checked, so a symlinked parent redirected
+  Egret's root writes anywhere on the host. The job summary was opened with
+  `O_CREATE` and followed symlinks and hard links, so a build could point it at a
+  root-owned file such as `/etc/ld.so.preload`. On a self-hosted runner this
+  could lead to root code execution (traced in code, not run end to end). Paths
+  are now opened one component at a time, and a
+  symlink is followed only in a directory that root alone controls. Files are
+  written relative to the open directory handle. The job summary must be a regular
+  file with one link, owned by the invoking user, root, or the owner of its
+  directory, and is opened non-blocking (a FIFO there no longer hangs the job).
+- **A build can no longer erase or forge its own result.** A build could create a
+  directory named `report.json`: the write failed, the error was only logged, the
+  violation count read as 0, and `fail-on-violations` passed. A failed report write
+  now fails the run. The action also refuses to continue when no report exists.
+- **The post-run steps no longer run a binary the build could replace.** SARIF
+  generation and GitHub publishing (with your token) ran the binary in the
+  runner-owned install directory. The action now copies the verified binary into a
+  fresh root-owned directory before the build starts, writes the report there, and
+  uses only those afterwards. The report is then copied to the usual `report-dir`.
+  The directory is the first of `/var/tmp`, `/tmp`, `/opt` and `/usr/local/lib`
+  where the copied binary actually runs, so hosts that mount temp dirs `noexec`
+  still work, and get a clear error if none allows execution.
+
+### Changed
+
+- **`report.json` is always written,** whatever `report.format` lists. It is the
+  verdict the action counts violations from. A policy with `format: [markdown]`
+  used to produce no JSON, so the action read zero violations.
+- **The GitHub job summary is best effort.** If its path is unsafe or unusable, Egret
+  prints a warning and skips it instead of failing the run. The summary is a view,
+  not the verdict.
+
+### Tests
+
+- New hermetic tests run the real `entrypoint.sh run` with stand-in `sudo` and
+  `egret` binaries, and plant symlinks, hard links and directories for the report
+  writer. The attack tests fail on the previous code.
+
 ## [0.3.0] - Install robustness + CI cost and timeout work
 
 ### Fixed

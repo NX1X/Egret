@@ -124,8 +124,13 @@ func executeRun(cmd *cobra.Command, pol *policy.Policy, command []string, disabl
 	session.Command = command
 	session.ExitCode = exitCode
 
-	if err := report.Write(session, pol); err != nil {
-		fmt.Fprintln(os.Stderr, "egret: report error:", err)
+	// A report write failure is FATAL (checked below, after ingest). The build
+	// Egret monitors can cause one on purpose, for example by creating a
+	// directory named report.json. If the run then exited with the build's own
+	// code, consumers would read "no report" as "zero violations".
+	reportErr := report.Write(session, pol)
+	if reportErr != nil {
+		fmt.Fprintln(os.Stderr, "egret: report error:", reportErr)
 	}
 
 	// Optional self-hosted dashboard: when EGRET_INGEST_URL is set, ship the run.
@@ -143,6 +148,9 @@ func executeRun(cmd *cobra.Command, pol *policy.Policy, command []string, disabl
 	fmt.Fprintf(out, "egret: %d connection(s), %d violation(s); report in %s\n",
 		len(session.Connections), len(session.Violations), pol.Report.OutputDir)
 
+	if reportErr != nil {
+		return fmt.Errorf("writing the report failed, so this run's result cannot be trusted: %w", reportErr)
+	}
 	// Propagate the command's exit code.
 	if exitCode != 0 {
 		return &exitError{code: exitCode}

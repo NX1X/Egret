@@ -273,7 +273,41 @@ cmd_run() {
   local outdir="${EGRET_OUTPUT_DIR:-${INSTALL_DIR}/report}"
   mkdir -p "${outdir}"
 
-  local args=(run --mode "${EGRET_MODE:-audit}" --output-dir "${outdir}")
+  # Everything the post-run steps TRUST lives in a fresh directory owned by root:
+  # the binary that later runs with your GitHub token, and the report that sets
+  # the violation count. In block mode the build runs as THIS user, which owns
+  # ${INSTALL_DIR} and ${outdir}, so it could otherwise swap the binary or plant
+  # a report there. It cannot write into a root-owned 0755 directory, and /var/tmp
+  # is sticky, so it cannot rename or delete one either. The report is copied to
+  # ${outdir} afterwards, so the report-dir output is unchanged. (In audit mode the
+  # build runs as root, and audit mode is not a security boundary.)
+  #
+  # Candidates in order. A hardened host may mount /var/tmp and /tmp noexec, so
+  # each one is PROVEN by running the copied binary before it is used. The sticky
+  # temp dirs and the root-owned 0755 /opt and /usr/local/lib all keep a non-root
+  # build from renaming or deleting the directory.
+  local safe_dir="" base candidate
+  for base in /var/tmp /tmp /opt /usr/local/lib; do
+    [[ -d "${base}" ]] || continue
+    candidate="$(sudo mktemp -d "${base}/egret.XXXXXXXXXX" 2>/dev/null)" || continue
+    if sudo chmod 0755 "${candidate}" \
+      && sudo install -o root -g root -m 0755 "${BIN}" "${candidate}/egret" \
+      && sudo "${candidate}/egret" version >/dev/null 2>&1; then
+      safe_dir="${candidate}"
+      break
+    fi
+    sudo rm -rf -- "${candidate}"
+  done
+  if [[ -z "${safe_dir}" ]]; then
+    echo "::error::Egret found no root-owned directory where its binary can execute (tried /var/tmp, /tmp, /opt, /usr/local/lib). If they are mounted noexec, allow exec on one of them for this runner."
+    exit 1
+  fi
+  # shellcheck disable=SC2064  # expand safe_dir now; it is local to this function
+  trap "sudo rm -rf -- '${safe_dir}'" EXIT
+  local safe_bin="${safe_dir}/egret"
+  local safe_out="${safe_dir}/report"
+
+  local args=(run --mode "${EGRET_MODE:-audit}" --output-dir "${safe_out}")
   if [[ -n "${EGRET_POLICY:-}" ]]; then
     args+=(--config "${EGRET_POLICY}")
   fi
@@ -320,23 +354,43 @@ cmd_run() {
   # credential Egret itself introduces is the one dropped here.
   set +e
   sudo "${sudo_env[@]+"${sudo_env[@]}"}" -E \
-    env -u EGRET_GITHUB_TOKEN "PATH=${PATH}" "${BIN}" "${args[@]}" -- bash -euo pipefail -c "${EGRET_COMMAND}"
+    env -u EGRET_GITHUB_TOKEN "PATH=${PATH}" "${safe_bin}" "${args[@]}" -- bash -euo pipefail -c "${EGRET_COMMAND}"
   local rc=$?
   set -e
   echo "::endgroup::"
 
-  local reportjson="${outdir}/report.json"
+  local reportjson="${safe_out}/report.json"
 
-  # SARIF for Code Scanning.
+  # A command ran, so a report must exist. Without one, the count below would
+  # read 0 violations and skip SARIF, publishing and fail-on-violations - the
+  # outcome a hostile build wants. Fail closed instead.
+  if [[ ! -f "${reportjson}" ]]; then
+    echo "::error::Egret wrote no report, so this run's result cannot be trusted. Failing closed (a missing report must not read as zero violations). See the egret output above."
+    exit 1
+  fi
+
+  # Copy the reports to the caller-visible directory (the report-dir output).
+  # Remove whatever is at each name first, so a link or directory the build left
+  # there is replaced, never written through.
+  local f
+  for f in report.json report.md report.sarif; do
+    if [[ -f "${safe_out}/${f}" ]]; then
+      rm -rf -- "${outdir:?}/${f}"
+      cp -- "${safe_out}/${f}" "${outdir}/${f}"
+    fi
+  done
+
+  # SARIF for Code Scanning, generated from the TRUSTED report by the TRUSTED binary.
   local sarif=""
-  if [[ "${EGRET_SARIF:-true}" == "true" && -f "${reportjson}" ]]; then
+  if [[ "${EGRET_SARIF:-true}" == "true" ]]; then
     sarif="${outdir}/egret.sarif"
+    rm -rf -- "${sarif}"
     echo "::group::Egret SARIF"
     local rargs=(report --from "${reportjson}" --format sarif --out "${sarif}")
     if [[ -n "${EGRET_POLICY:-}" ]]; then
       rargs+=(--policy-path "${EGRET_POLICY}")
     fi
-    "${BIN}" "${rargs[@]}"
+    "${safe_bin}" "${rargs[@]}"
     echo "::endgroup::"
   fi
 
@@ -365,19 +419,19 @@ cmd_run() {
     else
       echo "::group::Egret GitHub publish"
       if [[ "${EGRET_CHECK_RUN:-false}" == "true" ]]; then
-        GITHUB_TOKEN="${EGRET_GITHUB_TOKEN}" "${BIN}" github check --from "${reportjson}" \
+        GITHUB_TOKEN="${EGRET_GITHUB_TOKEN}" "${safe_bin}" github check --from "${reportjson}" \
           || echo "::warning::egret github check failed (does the token have checks: write?)"
       fi
       if [[ "${EGRET_PR_COMMENT:-false}" == "true" ]]; then
         if [[ "${GITHUB_REF:-}" == refs/pull/* ]]; then
-          GITHUB_TOKEN="${EGRET_GITHUB_TOKEN}" "${BIN}" github comment --from "${reportjson}" \
+          GITHUB_TOKEN="${EGRET_GITHUB_TOKEN}" "${safe_bin}" github comment --from "${reportjson}" \
             || echo "::warning::egret github comment failed (does the token have pull-requests: write?)"
         else
           echo "::notice::pr-comment enabled but this is not a pull_request event; skipping the comment."
         fi
       fi
       if [[ "${EGRET_DASHBOARD_ISSUE:-false}" == "true" ]]; then
-        GITHUB_TOKEN="${EGRET_GITHUB_TOKEN}" "${BIN}" github dashboard --from "${reportjson}" \
+        GITHUB_TOKEN="${EGRET_GITHUB_TOKEN}" "${safe_bin}" github dashboard --from "${reportjson}" \
           || echo "::warning::egret github dashboard failed (does the token have issues: write?)"
       fi
       echo "::endgroup::"

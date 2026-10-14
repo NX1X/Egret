@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -18,43 +17,44 @@ import (
 
 // Write emits the configured report formats for the session.
 func Write(s *event.Session, pol *policy.Policy) error {
-	// Refuse a symlinked report directory. The monitored build can write to the
-	// default (relative) OutputDir, so it could swap it for a symlink to an
-	// attacker-chosen directory right before exiting and redirect Egret's
-	// (root-privileged) report writes there. Reject the symlink rather than
-	// transparently following it.
-	if fi, err := os.Lstat(pol.Report.OutputDir); err == nil && fi.Mode()&os.ModeSymlink != 0 {
-		return fmt.Errorf("report dir %q is a symlink; refusing to write through it", pol.Report.OutputDir)
+	// Open the report directory without following any symlink a non-root user
+	// could have planted, in ANY component of the path (not only the last one),
+	// and write every file relative to that handle. The monitored build may own
+	// part of this path; see safewrite_unix.go.
+	dir, err := openDirNoFollow(pol.Report.OutputDir, true)
+	if err != nil {
+		return fmt.Errorf("opening report dir: %w", err)
 	}
-	if err := os.MkdirAll(pol.Report.OutputDir, 0o755); err != nil {
-		return fmt.Errorf("creating report dir: %w", err)
-	}
+	defer dir.Close()
 
 	formats := map[string]bool{}
 	for _, f := range pol.Report.Format {
 		formats[f] = true
 	}
 
-	if formats["json"] {
-		b, err := json.MarshalIndent(s, "", "  ")
-		if err != nil {
-			return fmt.Errorf("marshalling json report: %w", err)
-		}
-		path := filepath.Join(pol.Report.OutputDir, "report.json")
-		if err := writeFileAtomic(path, append(b, '\n'), 0o644); err != nil {
-			return fmt.Errorf("writing json report: %w", err)
-		}
+	// report.json is ALWAYS written, whatever report.format lists: it is the
+	// machine-readable verdict that the action counts violations from and publishes
+	// from. Without it, a policy with `format: [markdown]` read as zero violations.
+	b, err := json.MarshalIndent(s, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshalling json report: %w", err)
+	}
+	if err := writeFileAt(dir, "report.json", append(b, '\n'), 0o644); err != nil {
+		return fmt.Errorf("writing json report: %w", err)
 	}
 
 	if formats["markdown"] {
 		md := Markdown(s)
-		path := filepath.Join(pol.Report.OutputDir, "report.md")
-		if err := writeFileAtomic(path, []byte(md), 0o644); err != nil {
+		if err := writeFileAt(dir, "report.md", []byte(md), 0o644); err != nil {
 			return fmt.Errorf("writing markdown report: %w", err)
 		}
+		// The job summary is best effort. It is a convenience view, not the verdict
+		// (report.json is), and it lives in a runner-owned path that legitimate
+		// setups can make unusable (container jobs, symlinked work dirs). A refusal
+		// to write through an unsafe path must not fail an otherwise clean run.
 		if pol.Report.GitHubJobSummary {
 			if err := appendJobSummary(md); err != nil {
-				return fmt.Errorf("writing job summary: %w", err)
+				fmt.Fprintln(os.Stderr, "egret: warning: job summary not written:", err)
 			}
 		}
 	}
@@ -64,62 +64,11 @@ func Write(s *event.Session, pol *policy.Policy) error {
 		if err != nil {
 			return fmt.Errorf("marshalling sarif report: %w", err)
 		}
-		path := filepath.Join(pol.Report.OutputDir, "report.sarif")
-		if err := writeFileAtomic(path, append(b, '\n'), 0o644); err != nil {
+		if err := writeFileAt(dir, "report.sarif", append(b, '\n'), 0o644); err != nil {
 			return fmt.Errorf("writing sarif report: %w", err)
 		}
 	}
 	return nil
-}
-
-// writeFileAtomic writes data to a fresh temp file in the target directory and
-// renames it into place, so a reader (or a racing writer inside the monitored
-// build) can never observe a half-written or externally-overwritten report:
-// the final report.json/sarif is whatever Egret rename()d last, and rename is
-// atomic on POSIX. This closes the report-tampering race where a detached
-// process left running by the build kept overwriting the report file after
-// Egret's own (previously non-atomic) write.
-func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
-	dir := filepath.Dir(path)
-	tmp, err := os.CreateTemp(dir, ".egret-report-*")
-	if err != nil {
-		return err
-	}
-	tmpName := tmp.Name()
-	// Best-effort cleanup if we bail before the rename succeeds.
-	defer func() { _ = os.Remove(tmpName) }()
-
-	if _, err := tmp.Write(data); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Chmod(perm); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Sync(); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	return os.Rename(tmpName, path)
-}
-
-// appendJobSummary appends md to $GITHUB_STEP_SUMMARY when present (no-op off CI).
-func appendJobSummary(md string) error {
-	path := os.Getenv("GITHUB_STEP_SUMMARY")
-	if path == "" {
-		return nil
-	}
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	_, err = f.WriteString(md + "\n")
-	return err
 }
 
 // Markdown renders the session as a GitHub-flavoured Markdown report.
