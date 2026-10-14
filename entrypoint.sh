@@ -307,15 +307,29 @@ cmd_run() {
   local safe_bin="${safe_dir}/egret"
   local safe_out="${safe_dir}/report"
 
-  local args=(run --mode "${EGRET_MODE:-audit}" --output-dir "${safe_out}")
+  local args=(run --output-dir "${safe_out}")
+  # Pass --mode ONLY when the caller set the input. It used to default to audit
+  # and was always passed, which silently overrode a policy's `mode: block`: the
+  # user believed egress was enforced while the run only observed it.
+  local mode_label="policy"
+  case "${EGRET_MODE:-}" in
+    "") ;;
+    audit|block) args+=(--mode "${EGRET_MODE}"); mode_label="${EGRET_MODE}" ;;
+    *)
+      echo "::error::mode must be audit or block (or empty to use the policy's mode); got '${EGRET_MODE}'."
+      exit 1
+      ;;
+  esac
   if [[ -n "${EGRET_POLICY:-}" ]]; then
     args+=(--config "${EGRET_POLICY}")
+  elif [[ -z "${EGRET_MODE:-}" ]]; then
+    mode_label="audit (no policy)"
   fi
   if [[ "${EGRET_DISABLE_SUDO:-false}" == "true" ]]; then
     args+=(--disable-sudo)
   fi
 
-  echo "::group::Egret run (${EGRET_MODE:-audit} mode)"
+  echo "::group::Egret run (${mode_label} mode)"
   # Egret needs root/CAP_BPF; GitHub-hosted runners allow passwordless sudo. The
   # user command is passed as a single argument to bash -c - never expanded into
   # this script - so it runs exactly as written with no re-interpretation here.
