@@ -4,17 +4,14 @@ go 1.26.9
 
 require (
 	github.com/cilium/ebpf v0.22.0
-	github.com/miekg/dns v1.1.62
+	github.com/miekg/dns v1.1.73
 	github.com/spf13/cobra v1.10.2
-	go.yaml.in/yaml/v3 v3.0.4
-	golang.org/x/sys v0.47.0
+	go.yaml.in/yaml/v3 v3.0.5
+	golang.org/x/sys v0.48.0
 )
 
 require (
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
-	golang.org/x/mod v0.31.0 // indirect
-	golang.org/x/net v0.57.0 // indirect
-	golang.org/x/sync v0.20.0 // indirect
-	golang.org/x/tools v0.40.1-0.20260108161641-ca281cf95054 // indirect
+	golang.org/x/net v0.60.0 // indirect
 )

@@ -97,9 +97,15 @@
       "labels": ["dependencies", "go"]
     },
     {
-      "description": "Go toolchain / go directive bumps reviewed on their own",
-      "matchManagers": ["gomod"],
-      "matchDepTypes": ["golang"],
+      // MUST stay the last rule: later rules override groupName from earlier ones.
+      // The Go toolchain lives in several places (the go.mod go directive, every
+      // setup-go `go-version`, the golang container images). Without this rule they
+      // landed in DIFFERENT groups ("go modules", "github-actions"), so each PR
+      // alone was inconsistent and failed CI, and one of them pinned Go 1.27.1,
+      // which is still vulnerable to GO-2026-6617. One group moves them together.
+      "description": "Go toolchain: go directive, setup-go go-version and golang images in ONE PR",
+      "matchDepNames": ["go", "golang"],
+      "groupName": "go toolchain",
       "labels": ["dependencies", "go", "toolchain"]
     }
   ],
