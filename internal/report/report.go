@@ -53,7 +53,7 @@ func Write(s *event.Session, pol *policy.Policy) error {
 		// setups can make unusable (container jobs, symlinked work dirs). A refusal
 		// to write through an unsafe path must not fail an otherwise clean run.
 		if pol.Report.GitHubJobSummary {
-			if err := appendJobSummary(md); err != nil {
+			if err := appendJobSummary(capSummary(md)); err != nil {
 				fmt.Fprintln(os.Stderr, "egret: warning: job summary not written:", err)
 			}
 		}
@@ -69,6 +69,29 @@ func Write(s *event.Session, pol *policy.Policy) error {
 		}
 	}
 	return nil
+}
+
+// maxSummaryBytes caps what Egret appends to the job summary. GitHub refuses a
+// step summary above 1024 KiB in total and then shows none of it, so a busy
+// build (thousands of connections) lost its whole summary. Half the limit
+// leaves room for anything else the same step writes.
+const maxSummaryBytes = 512 << 10
+
+// capSummary returns md unchanged when it fits in maxSummaryBytes. Otherwise it
+// cuts md at the last line break that fits and appends a note that points to
+// the full report. report.md and report.json are always written in full.
+func capSummary(md string) string {
+	if len(md) <= maxSummaryBytes {
+		return md
+	}
+	note := fmt.Sprintf("\n\n> **Summary truncated.** The full report is %d KiB, above what a GitHub job summary can show. "+
+		"Read `report.md` or `report.json` in the report directory for every entry.\n", len(md)>>10)
+	cut := maxSummaryBytes - len(note)
+	// Cut at a line break, so no Markdown row or multi-byte character is split.
+	if i := strings.LastIndexByte(md[:cut], '\n'); i > 0 {
+		cut = i
+	}
+	return md[:cut] + note
 }
 
 // Markdown renders the session as a GitHub-flavoured Markdown report.

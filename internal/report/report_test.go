@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/NX1X/Egret/internal/event"
 	"github.com/NX1X/Egret/internal/policy"
@@ -151,5 +152,34 @@ func TestMdEscapeCapsLength(t *testing.T) {
 	got := mdEscape(strings.Repeat("x", mdEscapeMaxLen+100))
 	if len([]rune(got)) > mdEscapeMaxLen+1 { // +1 for the ellipsis
 		t.Errorf("mdEscape did not cap length: got %d runes", len([]rune(got)))
+	}
+}
+
+func TestCapSummary(t *testing.T) {
+	small := "# Egret\n\nshort\n"
+	if got := capSummary(small); got != small {
+		t.Errorf("a small summary must pass unchanged, got %q", got)
+	}
+
+	// About 1.5 MiB of table rows, like the website job that GitHub refused.
+	var b strings.Builder
+	b.WriteString("# Egret report\n\n| proc | dst |\n|---|---|\n")
+	for b.Len() < 1536<<10 {
+		b.WriteString("| curl | 104.20.23.154:443 é |\n")
+	}
+	big := b.String()
+	got := capSummary(big)
+	if len(got) > maxSummaryBytes {
+		t.Fatalf("capped summary is %d bytes, want at most %d", len(got), maxSummaryBytes)
+	}
+	if !strings.Contains(got, "Summary truncated") || !strings.Contains(got, "report.json") {
+		t.Errorf("capped summary must say it was truncated and point to the full report")
+	}
+	if !utf8.ValidString(got) {
+		t.Error("capped summary is not valid UTF-8 (a multi-byte character was split)")
+	}
+	body := strings.SplitN(got, "\n\n> **Summary truncated.**", 2)[0]
+	if !strings.HasPrefix(big, body) || !strings.HasSuffix(body, "|") {
+		t.Errorf("the summary must be cut after a whole row, got tail %q", body[len(body)-30:])
 	}
 }
