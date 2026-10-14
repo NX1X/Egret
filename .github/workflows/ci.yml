@@ -37,7 +37,7 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         timeout-minutes: 5
         with:
-          go-version: "1.26.9"
+          go-version: "1.27.1"
       # No explicit `go mod download`: setup-go restores the module cache and the
       # build/test steps below fetch whatever is still missing. (The `ebpf` job
       # does keep it - see the note there.)
@@ -94,7 +94,7 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         timeout-minutes: 5
         with:
-          go-version: "1.26.9"
+          go-version: "1.27.1"
       # Kept here (unlike in `unit`): `go mod verify` below only checks modules
       # that are actually IN the download cache, so it would pass vacuously if
       # nothing had been fetched yet.
@@ -158,7 +158,7 @@ jobs:
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         timeout-minutes: 5
         with:
-          go-version: "1.26.9"
+          go-version: "1.27.1"
       - name: Build (from committed eBPF bindings)
         run: make build
       - name: DNS end-to-end checks
