@@ -47,6 +47,10 @@ YAML
 # Controls, outside Egret. The denied host's IP, for the raw-IP checks.
 DENIED_IP="$(dig +short api.github.com A | grep -E '^[0-9.]+$' | head -1)"
 if [ -z "${DENIED_IP}" ]; then echo "::error::cannot resolve api.github.com outside Egret"; exit 1; fi
+# ...and it must be reachable outside Egret, or "blocked" inside proves nothing.
+curl -fsS --connect-timeout 8 --max-time 10 -o /dev/null \
+    --resolve "api.github.com:443:${DENIED_IP}" https://api.github.com \
+  || { echo "::error::control: ${DENIED_IP} is not reachable outside Egret"; exit 1; }
 # The stubs must answer outside Egret, or "blocked" inside proves nothing.
 dig @127.0.0.53 example.com +time=2 +tries=1 >/dev/null 2>&1 \
   || { echo "::error::control: 127.0.0.53 does not answer outside Egret"; exit 1; }
