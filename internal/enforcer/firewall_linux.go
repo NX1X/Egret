@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -30,7 +31,9 @@ const selfProbeCanaryIP = "192.0.2.1"
 
 // nftFirewall enforces default-deny egress by shelling out to `nft` (a native
 // netlink library is a possible later optimization). It creates a dedicated
-// inet table `egret` with v4+v6 allow sets so teardown is a single table drop.
+// per-run inet table `egret_<pid>` with v4+v6 allow sets, so teardown is a
+// single table drop and a second Egret run on the same host never adds to, or
+// deletes, this run's rules.
 //
 // The filter is SCOPED to the monitored build's cgroup via `socket cgroupv2`, so
 // Egret's own traffic - critically the DNS proxy's upstream query - is never
@@ -55,18 +58,52 @@ func newFirewall(pol *policy.Policy) (firewall, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &nftFirewall{pol: pol, table: "egret", cg: cg}, nil
+	return &nftFirewall{pol: pol, table: tableName(os.Getpid()), cg: cg}, nil
+}
+
+// tableName is the per-run nft table. The pid matches the build cgroup's name
+// (egret-run-<pid>), so both are easy to tie to one run.
+func tableName(pid int) string { return fmt.Sprintf("egret_%d", pid) }
+
+// dnsRules returns the nft rules (after `add rule inet <table> output <scope> `)
+// that confine the build's DNS on loopback: DNS (UDP or TCP port 53) to the
+// run's proxy is accepted, DNS to any other loopback address (for example the
+// systemd-resolved stub at 127.0.0.53, or ::1) is dropped, and all other
+// loopback traffic is accepted. Without the drop, the build could resolve
+// through the stub, so the proxy would see no query (no domain labels, and
+// allowlisted hosts would be blocked) and DNS could tunnel data out through
+// the host resolver.
+func dnsRules(dnsAddr string) ([]string, error) {
+	host, port, err := net.SplitHostPort(dnsAddr)
+	if err != nil {
+		return nil, fmt.Errorf("dns proxy address %q: %w", dnsAddr, err)
+	}
+	ip := net.ParseIP(host)
+	if ip == nil || ip.To4() == nil || !ip.IsLoopback() || port != "53" {
+		return nil, fmt.Errorf("dns proxy address %q: want an IPv4 loopback address on port 53", dnsAddr)
+	}
+	return []string{
+		fmt.Sprintf("ip daddr %s meta l4proto { tcp, udp } th dport 53 accept", ip),
+		`oifname "lo" meta l4proto { tcp, udp } th dport 53 counter drop`,
+		`oifname "lo" accept`,
+	}, nil
 }
 
 // BuildCgroupFD is the cgroup-v2 dir fd the monitored command joins.
 func (f *nftFirewall) BuildCgroupFD() int { return f.cg.fd() }
 
-// Setup installs the egret table: TTL-capable allow sets plus an output chain that
-// subjects ONLY the build cgroup to default-deny (accept loopback + established +
-// allow-set members, drop the rest); all other traffic falls through to accept.
-func (f *nftFirewall) Setup(ctx context.Context) error {
+// Setup installs the run's table: TTL-capable allow sets plus an output chain
+// that subjects ONLY the build cgroup to default-deny (accept established,
+// DNS to the run's proxy, other loopback and allow-set members; drop the rest).
+// All other traffic falls through to accept.
+func (f *nftFirewall) Setup(ctx context.Context, dnsAddr string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+
+	dns, err := dnsRules(dnsAddr)
+	if err != nil {
+		return err
+	}
 
 	// `sc` = the per-rule cgroup scope: match only the build's cgroup, at its real
 	// depth (computed, not hardcoded) so it holds under delegated/nested cgroups.
@@ -79,7 +116,13 @@ func (f *nftFirewall) Setup(ctx context.Context) error {
 	// have no timeout (they're policy, not resolved) and are populated below. Their
 	// accept rules sit before `counter drop`, so an allowed-ips destination is
 	// permitted even with no DNS lookup.
+	//
+	// The script starts with add+delete of the table: a table with this name can
+	// only be left over from a dead run whose pid was reused, and its rules would
+	// match the wrong cgroup. Within one `nft -f` the whole script is atomic.
 	script := fmt.Sprintf(`
+add table inet %[1]s
+delete table inet %[1]s
 add table inet %[1]s
 add set inet %[1]s allow4 { type ipv4_addr; flags timeout; size 4096; }
 add set inet %[1]s allow6 { type ipv6_addr; flags timeout; size 4096; }
@@ -88,15 +131,16 @@ add set inet %[1]s allow6cidr { type ipv6_addr; flags interval; auto-merge; size
 add counter inet %[1]s selfprobe
 add chain inet %[1]s output { type filter hook output priority 0; policy accept; }
 add rule inet %[1]s output %[2]s ct state established,related accept
-add rule inet %[1]s output %[2]s oifname "lo" accept
-add rule inet %[1]s output %[2]s udp dport 53 ip daddr 127.0.0.1 accept
+add rule inet %[1]s output %[2]s %[4]s
+add rule inet %[1]s output %[2]s %[5]s
+add rule inet %[1]s output %[2]s %[6]s
 add rule inet %[1]s output %[2]s ip daddr @allow4 accept
 add rule inet %[1]s output %[2]s ip6 daddr @allow6 accept
 add rule inet %[1]s output %[2]s ip daddr @allow4cidr accept
 add rule inet %[1]s output %[2]s ip6 daddr @allow6cidr accept
 add rule inet %[1]s output %[2]s ip daddr %[3]s counter name selfprobe drop
 add rule inet %[1]s output %[2]s counter drop
-`, f.table, sc, selfProbeCanaryIP)
+`, f.table, sc, selfProbeCanaryIP, dns[0], dns[1], dns[2])
 
 	// Populate the static CIDR sets from the policy's allowed-ips. A bad CIDR here
 	// would be caught at policy.Validate() long before this; each net stringifies to

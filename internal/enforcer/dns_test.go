@@ -1,6 +1,7 @@
 package enforcer
 
 import (
+	"context"
 	"net"
 	"testing"
 
@@ -110,7 +111,7 @@ func TestNoopFirewallAndDomainForIP(t *testing.T) {
 		t.Error("ListenAddr should be set")
 	}
 	// noopFirewall accepts everything without error.
-	if err := e.fw.Setup(nil); err != nil {
+	if err := e.fw.Setup(context.Background(), e.ListenAddr()); err != nil {
 		t.Errorf("noop Setup: %v", err)
 	}
 	if err := e.fw.AllowIPs("x", []net.IP{net.IPv4(1, 1, 1, 1)}, 300); err != nil {
