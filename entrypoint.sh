@@ -281,14 +281,29 @@ cmd_run() {
   # is sticky, so it cannot rename or delete one either. The report is copied to
   # ${outdir} afterwards, so the report-dir output is unchanged. (In audit mode the
   # build runs as root, and audit mode is not a security boundary.)
-  local tmpbase=/var/tmp
-  [[ -d "${tmpbase}" ]] || tmpbase=/tmp
-  local safe_dir
-  safe_dir="$(sudo mktemp -d "${tmpbase}/egret.XXXXXXXXXX")"
+  #
+  # Candidates in order. A hardened host may mount /var/tmp and /tmp noexec, so
+  # each one is PROVEN by running the copied binary before it is used. The sticky
+  # temp dirs and the root-owned 0755 /opt and /usr/local/lib all keep a non-root
+  # build from renaming or deleting the directory.
+  local safe_dir="" base candidate
+  for base in /var/tmp /tmp /opt /usr/local/lib; do
+    [[ -d "${base}" ]] || continue
+    candidate="$(sudo mktemp -d "${base}/egret.XXXXXXXXXX" 2>/dev/null)" || continue
+    if sudo chmod 0755 "${candidate}" \
+      && sudo install -o root -g root -m 0755 "${BIN}" "${candidate}/egret" \
+      && sudo "${candidate}/egret" version >/dev/null 2>&1; then
+      safe_dir="${candidate}"
+      break
+    fi
+    sudo rm -rf -- "${candidate}"
+  done
+  if [[ -z "${safe_dir}" ]]; then
+    echo "::error::Egret found no root-owned directory where its binary can execute (tried /var/tmp, /tmp, /opt, /usr/local/lib). If they are mounted noexec, allow exec on one of them for this runner."
+    exit 1
+  fi
   # shellcheck disable=SC2064  # expand safe_dir now; it is local to this function
   trap "sudo rm -rf -- '${safe_dir}'" EXIT
-  sudo chmod 0755 "${safe_dir}"
-  sudo install -o root -g root -m 0755 "${BIN}" "${safe_dir}/egret"
   local safe_bin="${safe_dir}/egret"
   local safe_out="${safe_dir}/report"
 

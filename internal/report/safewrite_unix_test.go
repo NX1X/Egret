@@ -8,6 +8,9 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
+
+	"golang.org/x/sys/unix"
 
 	"github.com/NX1X/Egret/internal/policy"
 )
@@ -38,6 +41,20 @@ func assertVictimUnchanged(t *testing.T, victim string) {
 	}
 }
 
+// buildWritableDir returns a temp directory that a non-root build could write
+// (mode 0777, like /tmp without the sticky bit), which is where an attacker
+// plants symlinks. A plain t.TempDir() is not enough: when the tests run as root
+// (CI runs them under the action, through sudo) it is root-owned 0700, and a
+// symlink there is correctly TRUSTED, because only root could have planted it.
+func buildWritableDir(t *testing.T) string {
+	t.Helper()
+	d := t.TempDir()
+	if err := os.Chmod(d, 0o777); err != nil {
+		t.Fatal(err)
+	}
+	return d
+}
+
 func polWithOutput(dir string) *policy.Policy {
 	p := policy.Default()
 	p.Report.OutputDir = dir
@@ -48,7 +65,7 @@ func polWithOutput(dir string) *policy.Policy {
 // Regression: only the LAST path component was checked, so a symlinked parent
 // directory redirected root's report writes anywhere.
 func TestWriteRefusesASymlinkedParentDirectory(t *testing.T) {
-	base := t.TempDir()
+	base := buildWritableDir(t)
 	target := filepath.Join(base, "target")
 	if err := os.Mkdir(target, 0o755); err != nil {
 		t.Fatal(err)
@@ -66,7 +83,7 @@ func TestWriteRefusesASymlinkedParentDirectory(t *testing.T) {
 }
 
 func TestWriteRefusesASymlinkedOutputDirectory(t *testing.T) {
-	base := t.TempDir()
+	base := buildWritableDir(t)
 	target := filepath.Join(base, "target")
 	if err := os.Mkdir(target, 0o755); err != nil {
 		t.Fatal(err)
@@ -145,7 +162,7 @@ func TestJobSummaryRefusesAHardLink(t *testing.T) {
 }
 
 func TestJobSummaryRefusesASymlinkedParentDirectory(t *testing.T) {
-	base := t.TempDir()
+	base := buildWritableDir(t)
 	real := filepath.Join(base, "real")
 	if err := os.Mkdir(real, 0o755); err != nil {
 		t.Fatal(err)
@@ -165,18 +182,80 @@ func TestJobSummaryRefusesASymlinkedParentDirectory(t *testing.T) {
 	assertVictimUnchanged(t, victim)
 }
 
-// Under sudo, the summary must belong to the user who started Egret. A file
-// owned by anyone else (for example a root file the build got linked in) is
-// refused. Simulated by claiming a different SUDO_UID.
-func TestJobSummaryRefusesAFileNotOwnedByTheInvokingUser(t *testing.T) {
+// The owner rule, as a pure function (a file owned by a third uid cannot be
+// created without root, so the refusal case is tested here).
+func TestSummaryOwnerAllowed(t *testing.T) {
+	u := func(n uint32) *uint32 { return &n }
+	for _, tc := range []struct {
+		name                  string
+		owner, dirOwner, euid uint32
+		sudo                  *uint32
+		want                  bool
+	}{
+		{"sudo user's own file (hosted runner)", 1001, 1001, 0, u(1001), true},
+		{"container job: root egret, runner-owned dir", 1001, 1001, 0, nil, true},
+		{"rootful run, root-owned file", 0, 0, 0, nil, true},
+		{"third user's file in the runner's dir", 2002, 1001, 0, u(1001), false},
+		{"third user's file, no sudo, non-root egret", 2002, 1001, 1001, nil, false},
+	} {
+		if got := summaryOwnerAllowed(tc.owner, tc.dirOwner, tc.sudo, tc.euid); got != tc.want {
+			t.Errorf("%s: summaryOwnerAllowed = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}
+
+// Review finding: a FIFO at the summary path blocked the open forever, because
+// the build is dead and no reader exists. It must fail at once instead.
+func TestJobSummaryDoesNotHangOnAFIFO(t *testing.T) {
 	summary := filepath.Join(t.TempDir(), "step_summary")
-	if err := os.WriteFile(summary, nil, 0o644); err != nil {
+	if err := unix.Mkfifo(summary, 0o644); err != nil {
+		t.Skipf("cannot create a FIFO here: %v", err)
+	}
+	t.Setenv("GITHUB_STEP_SUMMARY", summary)
+	done := make(chan error, 1)
+	go func() { done <- appendJobSummary("x") }()
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Error("appendJobSummary reported success writing to a FIFO")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("appendJobSummary blocked on a FIFO")
+	}
+}
+
+// Review finding: report.json is the verdict the action counts. A policy whose
+// report.format omits json must still produce it.
+func TestWriteAlwaysWritesReportJSON(t *testing.T) {
+	out := t.TempDir()
+	pol := polWithOutput(out)
+	pol.Report.Format = []string{"markdown"}
+	if err := Write(sampleSession(), pol); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(out, "report.json")); err != nil {
+		t.Errorf("report.json missing with format [markdown]: %v", err)
+	}
+}
+
+// Review finding: the job summary is a convenience view, not the verdict. An
+// unsafe summary path must be refused WITHOUT failing an otherwise clean run.
+func TestWriteSucceedsWhenTheJobSummaryIsRefused(t *testing.T) {
+	victim := newVictim(t)
+	summary := filepath.Join(t.TempDir(), "step_summary")
+	if err := os.Symlink(victim, summary); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("GITHUB_STEP_SUMMARY", summary)
-	t.Setenv("SUDO_UID", strconv.Itoa(os.Geteuid()+4242))
-	if err := appendJobSummary("injected"); err == nil {
-		t.Error("appendJobSummary wrote to a file owned by another user")
+	out := t.TempDir()
+	pol := polWithOutput(out)
+	pol.Report.GitHubJobSummary = true
+	if err := Write(sampleSession(), pol); err != nil {
+		t.Fatalf("Write failed because of the job summary: %v", err)
+	}
+	assertVictimUnchanged(t, victim)
+	if _, err := os.Stat(filepath.Join(out, "report.json")); err != nil {
+		t.Errorf("report.json missing: %v", err)
 	}
 }
 

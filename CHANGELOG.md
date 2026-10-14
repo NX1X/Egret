@@ -20,7 +20,8 @@ audit mode is not a security boundary.
   are now opened one component at a time, and a
   symlink is followed only in a directory that root alone controls. Files are
   written relative to the open directory handle. The job summary must be a regular
-  file with one link, owned by the user who started Egret.
+  file with one link, owned by the invoking user, root, or the owner of its
+  directory, and is opened non-blocking (a FIFO there no longer hangs the job).
 - **A build can no longer erase or forge its own result.** A build could create a
   directory named `report.json`: the write failed, the error was only logged, the
   violation count read as 0, and `fail-on-violations` passed. A failed report write
@@ -30,6 +31,18 @@ audit mode is not a security boundary.
   runner-owned install directory. The action now copies the verified binary into a
   fresh root-owned directory before the build starts, writes the report there, and
   uses only those afterwards. The report is then copied to the usual `report-dir`.
+  The directory is the first of `/var/tmp`, `/tmp`, `/opt` and `/usr/local/lib`
+  where the copied binary actually runs, so hosts that mount temp dirs `noexec`
+  still work, and get a clear error if none allows execution.
+
+### Changed
+
+- **`report.json` is always written,** whatever `report.format` lists. It is the
+  verdict the action counts violations from. A policy with `format: [markdown]`
+  used to produce no JSON, so the action read zero violations.
+- **The GitHub job summary is best effort.** If its path is unsafe or unusable, Egret
+  prints a warning and skips it instead of failing the run. The summary is a view,
+  not the verdict.
 
 ### Tests
 

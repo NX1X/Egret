@@ -78,6 +78,11 @@ func openDirComponent(parent int, name string, create bool) (int, error) {
 	if !rootOnlyDir(parent) {
 		return -1, fmt.Errorf("%q is a symlink in a directory a non-root user can write; refusing to follow it", name)
 	}
+	// Known limitation: the kernel resolves the whole target of this root-placed
+	// symlink, including any user-writable directories on the way. Only the
+	// directory holding the link is vouched for. Exploiting this needs root to
+	// have pointed a symlink into user-writable space; components after it are
+	// walked with O_NOFOLLOW again. rootOnlyDir also ignores POSIX ACLs.
 	return unix.Openat(parent, name, dirFlags, 0)
 }
 
@@ -152,10 +157,14 @@ func appendJobSummary(md string) error {
 	base := filepath.Base(path)
 	dfd := int(dir.Fd())
 
+	// O_NONBLOCK: a FIFO planted at the summary path would otherwise block this
+	// open forever (the build is already dead, so no reader exists) and hang the
+	// job. Non-blocking, it fails at once. It has no effect on a regular file.
+	const flags = unix.O_WRONLY | unix.O_APPEND | unix.O_NOFOLLOW | unix.O_NONBLOCK | unix.O_CLOEXEC
 	created := false
-	fd, err := unix.Openat(dfd, base, unix.O_WRONLY|unix.O_APPEND|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+	fd, err := unix.Openat(dfd, base, flags, 0)
 	if errors.Is(err, unix.ENOENT) {
-		fd, err = unix.Openat(dfd, base, unix.O_WRONLY|unix.O_APPEND|unix.O_CREAT|unix.O_EXCL|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0o644)
+		fd, err = unix.Openat(dfd, base, flags|unix.O_CREAT|unix.O_EXCL, 0o644)
 		created = err == nil
 	}
 	if err != nil {
@@ -167,7 +176,7 @@ func appendJobSummary(md string) error {
 	f := os.NewFile(uintptr(fd), path)
 	defer f.Close()
 	if !created {
-		if err := checkSummaryFile(f); err != nil {
+		if err := checkSummaryFile(f, dfd); err != nil {
 			return fmt.Errorf("job summary %q: %w", path, err)
 		}
 	}
@@ -176,10 +185,10 @@ func appendJobSummary(md string) error {
 }
 
 // checkSummaryFile refuses a job-summary file that is not a regular file with
-// exactly one link, owned by the user who started Egret. A second link means the
-// name may be a hard link to a file the build must not reach.
-func checkSummaryFile(f *os.File) error {
-	var st unix.Stat_t
+// exactly one link, or whose owner is not an expected one. A second link means
+// the name may be a hard link to a file the build must not reach.
+func checkSummaryFile(f *os.File, parent int) error {
+	var st, pst unix.Stat_t
 	if err := unix.Fstat(int(f.Fd()), &st); err != nil {
 		return err
 	}
@@ -189,19 +198,39 @@ func checkSummaryFile(f *os.File) error {
 	if uint64(st.Nlink) != 1 {
 		return fmt.Errorf("has %d hard links; refusing to write", st.Nlink)
 	}
-	if want := invokingUID(); st.Uid != want {
-		return fmt.Errorf("owned by uid %d, not by the invoking user %d; refusing to write", st.Uid, want)
+	if err := unix.Fstat(parent, &pst); err != nil {
+		return err
+	}
+	if !summaryOwnerAllowed(st.Uid, pst.Uid, sudoUID(), uint32(os.Geteuid())) {
+		return fmt.Errorf("owned by uid %d, which is not the invoking user, root, or the owner of its directory; refusing to write", st.Uid)
 	}
 	return nil
 }
 
-// invokingUID is the user who started Egret: SUDO_UID under sudo, otherwise the
-// effective uid.
-func invokingUID() uint32 {
-	if s := os.Getenv("SUDO_UID"); s != "" {
-		if n, err := strconv.ParseUint(s, 10, 32); err == nil {
-			return uint32(n)
-		}
+// summaryOwnerAllowed accepts the summary file's owner when it is the user who
+// started Egret through sudo, Egret's own effective user, or the owner of the
+// directory that holds the file. The last case covers container jobs and rootful
+// runs without sudo, where the runner (a different uid) owns its file-commands
+// directory. None of these lets the build reach a foreign file: it cannot follow
+// a symlink (O_NOFOLLOW), cannot use a hard link (one link only), and a non-root
+// build cannot create a file owned by anyone else.
+func summaryOwnerAllowed(owner, dirOwner uint32, sudo *uint32, euid uint32) bool {
+	if sudo != nil && owner == *sudo {
+		return true
 	}
-	return uint32(os.Geteuid())
+	return owner == euid || owner == dirOwner
+}
+
+// sudoUID is SUDO_UID when Egret runs under sudo, otherwise nil.
+func sudoUID() *uint32 {
+	s := os.Getenv("SUDO_UID")
+	if s == "" {
+		return nil
+	}
+	n, err := strconv.ParseUint(s, 10, 32)
+	if err != nil {
+		return nil
+	}
+	u := uint32(n)
+	return &u
 }

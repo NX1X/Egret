@@ -62,6 +62,7 @@ case "$sub" in
     echo '{}' > "${o}"
     ;;
   github) exit 0 ;;
+  version) exit "${FAKE_VERSION_RC:-0}" ;;
 esac
 `
 
@@ -169,6 +170,23 @@ func TestRunNeverExecutesABinaryTheBuildReplaced(t *testing.T) {
 	)
 	if _, err := os.Stat(marker); err == nil {
 		t.Fatalf("a post-run step executed the binary the build replaced:\n%s", out)
+	}
+}
+
+// Review finding: on a host whose temp dirs are mounted noexec, the copied
+// binary cannot run. The action must say so clearly, not claim "wrote no report".
+// (126 is what the shell returns for a binary it cannot execute.)
+func TestRunExplainsWhenNoTrustedDirectoryCanExecute(t *testing.T) {
+	e := newRunEnv(t)
+	out, code := e.run(t, "FAKE_VERSION_RC=126")
+	if code == 0 {
+		t.Fatalf("run passed although the binary could not execute anywhere:\n%s", out)
+	}
+	if !strings.Contains(out, "no root-owned directory where its binary can execute") {
+		t.Errorf("missing the noexec explanation:\n%s", out)
+	}
+	if strings.Contains(out, "wrote no report") {
+		t.Errorf("shows the misleading no-report message:\n%s", out)
 	}
 }
 

@@ -6,6 +6,7 @@ package report
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -31,14 +32,15 @@ func Write(s *event.Session, pol *policy.Policy) error {
 		formats[f] = true
 	}
 
-	if formats["json"] {
-		b, err := json.MarshalIndent(s, "", "  ")
-		if err != nil {
-			return fmt.Errorf("marshalling json report: %w", err)
-		}
-		if err := writeFileAt(dir, "report.json", append(b, '\n'), 0o644); err != nil {
-			return fmt.Errorf("writing json report: %w", err)
-		}
+	// report.json is ALWAYS written, whatever report.format lists: it is the
+	// machine-readable verdict that the action counts violations from and publishes
+	// from. Without it, a policy with `format: [markdown]` read as zero violations.
+	b, err := json.MarshalIndent(s, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshalling json report: %w", err)
+	}
+	if err := writeFileAt(dir, "report.json", append(b, '\n'), 0o644); err != nil {
+		return fmt.Errorf("writing json report: %w", err)
 	}
 
 	if formats["markdown"] {
@@ -46,9 +48,13 @@ func Write(s *event.Session, pol *policy.Policy) error {
 		if err := writeFileAt(dir, "report.md", []byte(md), 0o644); err != nil {
 			return fmt.Errorf("writing markdown report: %w", err)
 		}
+		// The job summary is best effort. It is a convenience view, not the verdict
+		// (report.json is), and it lives in a runner-owned path that legitimate
+		// setups can make unusable (container jobs, symlinked work dirs). A refusal
+		// to write through an unsafe path must not fail an otherwise clean run.
 		if pol.Report.GitHubJobSummary {
 			if err := appendJobSummary(md); err != nil {
-				return fmt.Errorf("writing job summary: %w", err)
+				fmt.Fprintln(os.Stderr, "egret: warning: job summary not written:", err)
 			}
 		}
 	}
