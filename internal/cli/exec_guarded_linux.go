@@ -24,16 +24,20 @@ const execGuardedCmdName = "__exec-guarded"
 // trampoline only exists on Linux (it is the block-mode privilege-drop path).
 func addPlatformCommands(root *cobra.Command) {
 	root.AddCommand(newExecGuardedCmd())
+	root.AddCommand(newExecPinnedCmd())
 	root.AddCommand(newSelfProbeCmd())
 }
 
 // newExecGuardedCmd is an internal privilege-drop trampoline. `egret run` re-execs
 //
-//	egret __exec-guarded --uid U --gid G -- <command...>
+//	egret __exec-guarded --uid U --gid G --resolv-conf F -- <command...>
 //
-// as root INSIDE the build cgroup (no SysProcAttr.Credential), and this command
-// then makes the drop UNRECOVERABLE before exec'ing the build:
+// as root INSIDE the build cgroup (no SysProcAttr.Credential) and in a new
+// mount namespace, and this command then makes the drop UNRECOVERABLE before
+// exec'ing the build:
 //
+//  0. Pin the build's resolver to Egret's DNS proxy (see resolver_linux.go).
+//     This needs CAP_SYS_ADMIN, so it runs before any capability is dropped.
 //  1. PR_SET_NO_NEW_PRIVS=1 - a later execve of a setuid-root or file-capability
 //     binary (sudo, mount, ping, newgrp) can NEVER regain privilege. This is the
 //     lock SysProcAttr.Credential alone does not give: dropping to a non-root uid
@@ -48,17 +52,53 @@ func addPlatformCommands(root *cobra.Command) {
 // never runs with more privilege than intended.
 func newExecGuardedCmd() *cobra.Command {
 	var uid, gid int
+	var resolvConf string
 	cmd := &cobra.Command{
 		Use:                   execGuardedCmdName,
 		Hidden:                true,
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.MinimumNArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			return execGuarded(uid, gid, args)
+			return execGuarded(uid, gid, resolvConf, args)
 		},
 	}
 	cmd.Flags().IntVar(&uid, "uid", 0, "non-root uid to drop the build to")
 	cmd.Flags().IntVar(&gid, "gid", 0, "non-root gid to drop the build to")
+	cmd.Flags().StringVar(&resolvConf, resolvConfFlag, "", "resolv.conf to pin for the build")
+	return cmd
+}
+
+// newExecPinnedCmd is the audit-mode trampoline:
+//
+//	egret __exec-pinned --resolv-conf F -- <command...>
+//
+// It runs in a new mount namespace, pins the build's resolver to Egret's DNS
+// proxy, and execs the command with no privilege change (audit mode runs the
+// build as the caller). Audit mode only observes, so a pinning failure is a
+// warning: the build still runs, but its connections may lack domain labels.
+func newExecPinnedCmd() *cobra.Command {
+	var resolvConf string
+	cmd := &cobra.Command{
+		Use:                   execPinnedName,
+		Hidden:                true,
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.MinimumNArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			if err := pinResolver(resolvConf); err != nil {
+				fmt.Fprintln(os.Stderr, "egret: warning: could not pin the build's DNS to Egret's proxy; connections may be reported without a domain:", err)
+			}
+			bin, err := exec.LookPath(args[0])
+			if err != nil {
+				return fmt.Errorf("%s: %w", execPinnedName, err)
+			}
+			if err := syscall.Exec(bin, args, sanitizedEnviron()); err != nil {
+				return fmt.Errorf("%s: exec %s: %w", execPinnedName, bin, err)
+			}
+			return nil // unreachable on success
+		},
+	}
+	cmd.Flags().StringVar(&resolvConf, resolvConfFlag, "", "resolv.conf to pin for the build")
+	_ = cmd.MarkFlagRequired(resolvConfFlag)
 	return cmd
 }
 
@@ -80,7 +120,7 @@ func runtimeCapLastCap() int {
 
 // execGuarded applies the irreversible privilege drop then execs command. On
 // success it never returns (the process image is replaced by the build).
-func execGuarded(uid, gid int, command []string) error {
+func execGuarded(uid, gid int, resolvConf string, command []string) error {
 	// Refuse to "drop" to root - that would defeat the entire boundary. The parent
 	// only ever calls us with a real non-root uid/gid, but verify fail-closed.
 	if uid <= 0 || gid <= 0 {
@@ -99,6 +139,15 @@ func execGuarded(uid, gid int, command []string) error {
 	bin, err := exec.LookPath(command[0])
 	if err != nil {
 		return fmt.Errorf("%s: %w", execGuardedCmdName, err)
+	}
+
+	// 0. Pin the resolver. Block mode is fail-closed: if the build's DNS cannot
+	//    be pinned to the proxy, the build would resolve around it, so refuse.
+	if resolvConf == "" {
+		return fmt.Errorf("%s: no --%s given; refusing to run the build unpinned", execGuardedCmdName, resolvConfFlag)
+	}
+	if err := pinResolver(resolvConf); err != nil {
+		return fmt.Errorf("%s: pin the build's DNS to Egret's proxy: %w", execGuardedCmdName, err)
 	}
 
 	// 1. no_new_privs - the crucial lock, set before the build's execve.

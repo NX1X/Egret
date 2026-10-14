@@ -24,7 +24,7 @@ func TestExecGuardedRefusesRootTarget(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			// A harmless command; the guard must reject before it is ever reached.
-			err := execGuarded(tc.uid, tc.gid, []string{"/bin/true"})
+			err := execGuarded(tc.uid, tc.gid, "", []string{"/bin/true"})
 			if err == nil {
 				t.Fatalf("execGuarded(uid=%d, gid=%d) = nil, want refusal", tc.uid, tc.gid)
 			}

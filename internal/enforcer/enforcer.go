@@ -21,7 +21,9 @@ import (
 // firewall is the platform-specific egress backend. newFirewall picks the impl.
 type firewall interface {
 	// Setup installs the default-deny egress rules and the (empty) allow set.
-	Setup(ctx context.Context) error
+	// dnsAddr is the run's DNS proxy (ip:port): the only DNS destination on
+	// loopback the build may reach.
+	Setup(ctx context.Context, dnsAddr string) error
 	// AllowIPs adds resolved IPs for an allowlisted domain to the allow set with
 	// an expiry (ttlSeconds) so a stale/rebinding answer does not stay allowed
 	// for the whole run.
@@ -75,20 +77,24 @@ func New(pol *policy.Policy) (*Enforcer, error) {
 	return e, nil
 }
 
-// Start installs firewall rules (block mode) and starts the DNS proxy. The
+// Start starts the DNS proxy, then installs firewall rules (block mode) that
+// allow the build DNS to that proxy only. The proxy starts first because its
+// per-run address is known only once it is bound; no query can arrive before
+// the build starts, so the firewall is up before the proxy is used. The
 // returned function must be deferred to restore the host network.
 func (e *Enforcer) Start(ctx context.Context) (stop func() error, err error) {
-	if err := e.fw.Setup(ctx); err != nil {
-		// Setup failure can still leave the build cgroup created (it's made when the
-		// firewall is constructed, before rules go up). Tear down so it doesn't leak;
-		// Teardown only deletes the nft table if it was actually installed.
-		_ = e.fw.Teardown()
-		return nil, fmt.Errorf("firewall setup: %w", err)
-	}
 	if err := e.dns.Start(ctx); err != nil {
-		// Roll back firewall so we never leave the host wedged.
+		// The firewall is constructed (build cgroup created) before Start, so
+		// tear it down to avoid leaking the cgroup.
 		_ = e.fw.Teardown()
 		return nil, fmt.Errorf("dns proxy: %w", err)
+	}
+	if err := e.fw.Setup(ctx, e.dns.ListenAddr()); err != nil {
+		// Roll back so we never leave the host wedged. Teardown only deletes the
+		// nft table if it was actually installed.
+		_ = e.dns.Stop()
+		_ = e.fw.Teardown()
+		return nil, fmt.Errorf("firewall setup: %w", err)
 	}
 	return func() error {
 		dnsErr := e.dns.Stop()
@@ -142,7 +148,7 @@ func (e *Enforcer) ListenAddr() string { return e.dns.ListenAddr() }
 // noopFirewall is used in audit mode: correlate, never block.
 type noopFirewall struct{}
 
-func (noopFirewall) Setup(context.Context) error                    { return nil }
+func (noopFirewall) Setup(context.Context, string) error            { return nil }
 func (noopFirewall) AllowIPs(string, []net.IP, uint32) error        { return nil }
 func (noopFirewall) BuildCgroupFD() int                             { return -1 }
 func (noopFirewall) Teardown() error                                { return nil }
