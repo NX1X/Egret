@@ -3,7 +3,7 @@
 Notable changes to Egret, following [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.4.0] - DNS correlation on hosted runners, honored block mode
 
 ### Changed (upgrade impact)
 
@@ -15,6 +15,51 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   enforced and may fail on egress your allowlist does not cover.** To keep the old
   behavior while you fix the allowlist, set `mode: audit` explicitly. An unknown
   `mode` value (anything but `audit` or `block`) now fails with a clear error.
+- **The build resolves through Egret's DNS proxy, in audit and block mode.** The
+  build now starts in its own mount namespace. There, `/etc/resolv.conf` names
+  a per-run proxy address (`127.53.x.y`), and the systemd-resolved and nscd
+  sockets are hidden. The host's own mounts are not changed. The proxy forwards
+  to the host's own resolver (fallback `1.1.1.1`), so split DNS and internal
+  names keep working. Block mode refuses to run the build if this setup fails;
+  audit mode prints a warning and runs the build without it.
+
+### Fixed
+
+- **Connections are labeled with their domain on GitHub-hosted runners.** These
+  runners resolve through systemd-resolved at `127.0.0.53`, so Egret's proxy
+  never saw a query. Audit mode reported every connection as raw-IP egress with
+  no domain, and block mode dropped allowlisted hosts, because their IPs never
+  reached the allow set.
+- **Two Egret runs on one host no longer break each other.** Every run used the
+  same nft table and the same proxy address. A second run failed to start, and
+  its rollback deleted the shared table, so the first run's build was no longer
+  confined. Each run now has its own table and build cgroup (a random run id)
+  and its own proxy address.
+- **The job summary is no longer lost on busy builds.** GitHub shows no step
+  summary at all above 1024 KiB. Egret now cuts its summary at 512 KiB and
+  points to `report.md` and `report.json`, which are still written in full.
+
+### Security
+
+- **In block mode, the build can no longer resolve around Egret.** DNS on
+  loopback is accepted only to the run's own proxy. All other loopback DNS is
+  dropped: the systemd-resolved stubs, `::1`, port 53 rewritten by a nat rule,
+  and Docker's embedded DNS at `127.0.0.11`. Before, the build could query the
+  resolver stub directly, and a DNS query can carry data out. Other loopback
+  traffic is not affected.
+- Known residual: a tool that calls systemd-resolved over D-Bus (for example
+  `resolvectl query`) still bypasses the proxy. Block mode still drops the
+  connection to a name the proxy did not resolve, but the query itself leaves
+  the host.
+
+### Changed
+
+- **Dependencies:** `golang.org/x/net` v0.60.0 and `golang.org/x/mod` v0.40.0
+  (security updates), `miekg/dns` v1.1.73, `go.yaml.in/yaml/v3` v3.0.5,
+  `golang.org/x/sys` v0.48.0. Go stays on 1.26.9: Go 1.27.0 and 1.27.1 are
+  vulnerable (GO-2026-6617).
+- **CI:** a new `dns-e2e` job runs 18 DNS and block-mode checks on a
+  GitHub-hosted runner, each with a positive control outside Egret.
 
 ## [0.3.0] - Install robustness, block-mode report integrity, CI cost work
 
@@ -316,6 +361,7 @@ generation - shipped as a CLI and a GitHub Action, with no server and no phone-h
 - **Hardened by default:** no phone-home; egress/event records are metadata only
   (never payloads); block mode is fail-closed on teardown.
 
+[0.4.0]: https://github.com/NX1X/Egret/releases/tag/v0.4.0
 [0.3.0]: https://github.com/NX1X/Egret/releases/tag/v0.3.0
 [0.2.0]: https://github.com/NX1X/Egret/releases/tag/v0.2.0
 [0.1.3]: https://github.com/NX1X/Egret/releases/tag/v0.1.3
