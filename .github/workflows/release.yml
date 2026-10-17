@@ -73,7 +73,7 @@ jobs:
         with:
           # Pin the patched toolchain (crypto/tls GO-2026-5856 + related stdlib
           # advisories, plus GO-2026-6617, all fixed by go1.26.9) so the trust artifact is built vuln-free.
-          go-version: "1.26.9"
+          go-version: "1.27.1"
           # No build cache on the release/trust path: a cache entry populated by a
           # lower-privileged workflow (PR) must not be restorable here (cache poisoning).
           cache: false
