@@ -136,7 +136,7 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         timeout-minutes: 5
         with:
-          go-version: "1.26.9"
+          go-version: "1.27.2"
 
       # Built from source every run, deliberately NOT cached. Caching the binary
       # would save ~25s, but this is the scanner that gates the merge: a cache is
@@ -173,7 +173,7 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         timeout-minutes: 5
         with:
-          go-version: "1.26.9"
+          go-version: "1.27.2"
 
       - name: Initialize CodeQL
         timeout-minutes: 6
