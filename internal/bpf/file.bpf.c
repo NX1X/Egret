@@ -11,6 +11,7 @@
 #include "vmlinux.h"
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_core_read.h>
+#include "scope.h"
 
 char LICENSE[] SEC("license") = "GPL";
 
@@ -43,10 +44,14 @@ int trace_openat(struct trace_event_raw_sys_enter *ctx)
 	long flags = (long)ctx->args[2];
 	if (!(flags & WRITE_INTENT))
 		return 0;
+	if (!in_scope())
+		return 0;
 
 	struct file_event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
-	if (!e)
+	if (!e) {
+		count_drop();
 		return 0;
+	}
 
 	e->pid = bpf_get_current_pid_tgid() >> 32;
 	bpf_get_current_comm(&e->comm, sizeof(e->comm));

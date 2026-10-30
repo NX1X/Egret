@@ -107,6 +107,9 @@ func TestNoopFirewallAndDomainForIP(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
+	// Audit mode now creates a build cgroup when it can (as root, or under a
+	// delegated systemd slice); always remove it.
+	t.Cleanup(func() { _ = e.cg.Close() })
 	if e.ListenAddr() == "" {
 		t.Error("ListenAddr should be set")
 	}
@@ -117,8 +120,9 @@ func TestNoopFirewallAndDomainForIP(t *testing.T) {
 	if err := e.fw.AllowIPs("x", []net.IP{net.IPv4(1, 1, 1, 1)}, 300); err != nil {
 		t.Errorf("noop AllowIPs: %v", err)
 	}
-	if fd := e.BuildCgroupFD(); fd != -1 {
-		t.Errorf("audit-mode BuildCgroupFD = %d, want -1", fd)
+	// The fd and the probe scope go together: both set, or both "none".
+	if hasFD, hasScope := e.BuildCgroupFD() >= 0, e.ScopeID() != 0; hasFD != hasScope {
+		t.Errorf("BuildCgroupFD = %d but ScopeID = %d; want both set or both unset", e.BuildCgroupFD(), e.ScopeID())
 	}
 	if err := e.fw.Teardown(); err != nil {
 		t.Errorf("noop Teardown: %v", err)

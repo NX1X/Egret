@@ -9,6 +9,7 @@
 #include "vmlinux.h"
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_core_read.h>
+#include "scope.h"
 
 char LICENSE[] SEC("license") = "GPL";
 
@@ -33,9 +34,14 @@ struct {
 SEC("tracepoint/syscalls/sys_enter_execve")
 int trace_execve(struct trace_event_raw_sys_enter *ctx)
 {
-	struct egret_proc_event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
-	if (!e)
+	if (!in_scope())
 		return 0;
+
+	struct egret_proc_event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
+	if (!e) {
+		count_drop();
+		return 0;
+	}
 
 	struct task_struct *task = (struct task_struct *)bpf_get_current_task();
 

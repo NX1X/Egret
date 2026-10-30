@@ -20,6 +20,9 @@ const (
 	KindConnection Kind = "connection"
 	KindProcess    Kind = "process"
 	KindFile       Kind = "file"
+	// KindMonitor flags a gap in what Egret could observe (lost events, a
+	// scope that recorded nothing), not something the build did.
+	KindMonitor Kind = "monitor"
 )
 
 // Connection is an observed outbound network connection (one tcp_connect or
@@ -90,6 +93,9 @@ type Session struct {
 	Processes   []Process    `json:"processes"`
 	FileWrites  []FileWrite  `json:"file_writes"`
 	Violations  []Violation  `json:"violations"`
+	// Notes are facts about coverage that are not violations, for example
+	// that the build used Docker, whose containers Egret does not monitor.
+	Notes []string `json:"notes,omitempty"`
 }
 
 // Duration returns how long the monitored command ran.

@@ -26,6 +26,9 @@ type Collector interface {
 	Processes() <-chan event.Process
 	// FileWrites yields write-intent file opens.
 	FileWrites() <-chan event.FileWrite
+	// Dropped is the number of events the kernel side lost because a ring
+	// buffer was full. Read it after the build has finished.
+	Dropped() uint64
 	// Close detaches all probes and releases kernel resources. Safe to call
 	// once; idempotency is the implementation's responsibility.
 	Close() error

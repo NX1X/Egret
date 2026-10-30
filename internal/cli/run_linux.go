@@ -90,8 +90,8 @@ func executeRun(cmd *cobra.Command, pol *policy.Policy, command []string, disabl
 		}
 	}
 
-	// eBPF collector.
-	coll, err := collector.New(ctx)
+	// eBPF collector, scoped to the build cgroup (0 = no scope, whole host).
+	coll, err := collector.New(ctx, enf.ScopeID())
 	if err != nil {
 		return err
 	}
@@ -117,7 +117,7 @@ func executeRun(cmd *cobra.Command, pol *policy.Policy, command []string, disabl
 
 	// Run the monitored command, wired to the parent's stdio. In block mode it is
 	// placed into the enforcer's cgroup so the egress filter scopes to the build.
-	exitCode := runCommand(ctx, command, enf.ListenAddr(), resolvConf, enf.BuildCgroupFD())
+	exitCode := runCommand(ctx, command, enf.ListenAddr(), resolvConf, enf.BuildCgroupFD(), pol.IsBlocking())
 
 	// Reap anything the build left running (block mode: the whole build cgroup)
 	// BEFORE the report is written, so a detached/daemonized process can't keep
@@ -131,7 +131,8 @@ func executeRun(cmd *cobra.Command, pol *policy.Policy, command []string, disabl
 	time.Sleep(250 * time.Millisecond)
 	_ = coll.Close()
 
-	session := mon.Wait()
+	mon.Wait()
+	session := mon.Finish(monitor.Coverage{Scoped: enf.ScopeID() != 0, KernelDropped: coll.Dropped()})
 	session.StartedAt = startedAt
 	session.FinishedAt = time.Now()
 	session.Command = command
@@ -177,10 +178,11 @@ func executeRun(cmd *cobra.Command, pol *policy.Policy, command []string, disabl
 // resolves through Egret's DNS proxy (see resolver_linux.go). EGRET_DNS also
 // carries the proxy address. When cgroupFD >= 0 (block mode) the child is
 // created directly inside the enforcer's cgroup (CLONE_INTO_CGROUP) so the
-// nftables egress filter scopes to the build.
-func runCommand(ctx context.Context, command []string, dnsAddr, resolvConf string, cgroupFD int) int {
+// nftables egress filter scopes to the build. In audit mode a cgroupFD >= 0
+// places the command in the build cgroup too, which scopes the eBPF probes.
+func runCommand(ctx context.Context, command []string, dnsAddr, resolvConf string, cgroupFD int, blocking bool) int {
 	var c *exec.Cmd
-	if cgroupFD >= 0 {
+	if blocking {
 		// Block mode: the cgroup filter is only a real boundary if the build runs LESS
 		// privileged than Egret - a root build could write itself out of the cgroup
 		// or `nft flush`. executeRun already refused block mode when no non-root
@@ -226,7 +228,7 @@ func runCommand(ctx context.Context, command []string, dnsAddr, resolvConf strin
 		// race the report file. (A child that deliberately setsid()s out of the group
 		// still escapes - the cgroup reap in block mode is the stronger boundary - but
 		// the atomic report write closes the torn-read window regardless.)
-		c = auditCommand(ctx, command, resolvConf)
+		c = auditCommand(ctx, command, resolvConf, cgroupFD)
 	}
 	c.Stdin = os.Stdin
 	c.Stdout = os.Stdout
@@ -237,14 +239,14 @@ func runCommand(ctx context.Context, command []string, dnsAddr, resolvConf strin
 	c.Env = append(sanitizedEnviron(), "EGRET_DNS="+dnsAddr)
 
 	if err := c.Start(); err != nil {
-		if cgroupFD >= 0 || resolvConf == "" {
+		if blocking || resolvConf == "" {
 			fmt.Fprintln(os.Stderr, "egret: failed to start command:", err)
 			return 127
 		}
 		// Audit mode: the new mount namespace may be refused (for example in a
 		// container without CAP_SYS_ADMIN). Run unpinned rather than not at all.
 		fmt.Fprintln(os.Stderr, "egret: warning: could not start the build in its own mount namespace; its DNS is not pinned to Egret's proxy:", err)
-		c = auditCommand(ctx, command, "")
+		c = auditCommand(ctx, command, "", cgroupFD)
 		c.Stdin, c.Stdout, c.Stderr = os.Stdin, os.Stdout, os.Stderr
 		c.Env = append(sanitizedEnviron(), "EGRET_DNS="+dnsAddr)
 		if err := c.Start(); err != nil {
@@ -257,7 +259,7 @@ func runCommand(ctx context.Context, command []string, dnsAddr, resolvConf strin
 	// linger and overwrite the report. Negative pid = signal the whole group led by
 	// the command (Setpgid made it the leader). Best-effort; ESRCH just means the
 	// group already exited. Block mode reaps via the cgroup (enf.KillBuild).
-	if cgroupFD < 0 && c.Process != nil {
+	if !blocking && c.Process != nil {
 		_ = syscall.Kill(-c.Process.Pid, syscall.SIGKILL)
 	}
 	if err == nil {
@@ -271,18 +273,25 @@ func runCommand(ctx context.Context, command []string, dnsAddr, resolvConf strin
 	return 1
 }
 
-// auditCommand builds the audit-mode command in its own process group. With a
-// resolvConf it goes through the __exec-pinned trampoline (via /proc/self/exe,
-// for the same reason as the block-mode trampoline) in a new mount namespace.
-func auditCommand(ctx context.Context, command []string, resolvConf string) *exec.Cmd {
+// auditCommand builds the audit-mode command in its own process group, inside
+// the build cgroup when cgroupFD >= 0. With a resolvConf it goes through the
+// __exec-pinned trampoline (via /proc/self/exe, for the same reason as the
+// block-mode trampoline) in a new mount namespace.
+func auditCommand(ctx context.Context, command []string, resolvConf string, cgroupFD int) *exec.Cmd {
+	attr := &syscall.SysProcAttr{Setpgid: true}
+	if cgroupFD >= 0 {
+		attr.UseCgroupFD = true
+		attr.CgroupFD = cgroupFD
+	}
 	if resolvConf == "" {
 		c := exec.CommandContext(ctx, command[0], command[1:]...)
-		c.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+		c.SysProcAttr = attr
 		return c
 	}
 	args := append([]string{execPinnedName, "--" + resolvConfFlag, resolvConf, "--"}, command...)
 	c := exec.CommandContext(ctx, "/proc/self/exe", args...)
-	c.SysProcAttr = &syscall.SysProcAttr{Setpgid: true, Unshareflags: syscall.CLONE_NEWNS}
+	attr.Unshareflags = syscall.CLONE_NEWNS
+	c.SysProcAttr = attr
 	return c
 }
 

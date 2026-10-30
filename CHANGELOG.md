@@ -3,6 +3,37 @@
 Notable changes to Egret, following [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **Reports contain only the build** ([#10](https://github.com/NX1X/Egret/issues/10)).
+  The probes recorded every process on the host, so the Azure guest agent's
+  connections to `168.63.129.16` on GitHub-hosted runners showed up as raw-IP
+  egress, and `fail-on-violations` failed every job. The build now runs in its
+  own cgroup in audit mode too (block mode already did), and the probes record
+  only that cgroup. If Egret cannot create the cgroup, it records the whole host
+  as before and says so in a report note.
+
+### Added
+
+- **Lost events are reported.** When a kernel ring buffer is full, or a session
+  holds more than 100,000 events of one kind, the report gets a `monitor`
+  violation that says how many events were lost. Before, they were lost
+  silently.
+- **Scope self-check.** If the probes are scoped to the build but record no
+  exec at all, the report gets a `monitor` violation instead of looking clean.
+- **Coverage notes** (`notes` in `report.json`, a Notes section in the
+  Markdown). When the build runs a container client such as `docker`, a note
+  says that container traffic is not covered: the container daemon starts
+  those containers outside the build.
+
+### Changed (upgrade impact)
+
+- **Containers started through Docker are no longer in the report.** Before,
+  their traffic was recorded together with every other process on the host.
+  It is now out of scope, and the report says so (see the note above).
+
 ## [0.4.0] - DNS correlation on hosted runners, honored block mode
 
 ### Changed (upgrade impact)

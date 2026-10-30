@@ -66,11 +66,19 @@ type LinuxCollector struct {
 	done      chan struct{} // closed by Close to unblock the ctx watcher
 	wg        sync.WaitGroup
 	closeOnce sync.Once
+
+	closed       bool   // set by Close; the maps are gone after it
+	finalDropped uint64 // drop count read by Close before it unloads the maps
 }
 
 // New loads the eBPF objects, attaches every probe, and starts the reader
 // goroutines. The returned collector streams until ctx is cancelled (or Close).
-func New(ctx context.Context) (Collector, error) {
+//
+// scopeCgroup is the cgroup-v2 id of the build: the probes record only tasks
+// in that cgroup. 0 records every task on the host (no build cgroup exists).
+// The scope is written before any probe attaches, so no out-of-scope event is
+// ever recorded.
+func New(ctx context.Context, scopeCgroup uint64) (Collector, error) {
 	if err := rlimit.RemoveMemlock(); err != nil {
 		return nil, fmt.Errorf("removing memlock rlimit: %w", err)
 	}
@@ -94,6 +102,10 @@ func New(ctx context.Context) (Collector, error) {
 		return nil, fmt.Errorf("loading file objects: %w", verboseVerifier(err))
 	}
 
+	if err := c.setScope(scopeCgroup); err != nil {
+		c.closeKernel()
+		return nil, err
+	}
 	if err := c.attach(); err != nil {
 		c.closeKernel()
 		return nil, err
@@ -103,6 +115,42 @@ func New(ctx context.Context) (Collector, error) {
 		return nil, err
 	}
 	return c, nil
+}
+
+// setScope writes the build's cgroup id into every probe's scope map.
+func (c *LinuxCollector) setScope(id uint64) error {
+	for name, m := range c.scopeMaps() {
+		if err := m.Put(uint32(0), id); err != nil {
+			return fmt.Errorf("setting the %s probe scope: %w", name, err)
+		}
+	}
+	return nil
+}
+
+func (c *LinuxCollector) scopeMaps() map[string]*ebpf.Map {
+	return map[string]*ebpf.Map{"network": c.net.ScopeCgroup, "process": c.proc.ScopeCgroup, "file": c.file.ScopeCgroup}
+}
+
+// Dropped sums the per-CPU drop counters of every probe. A read error counts
+// as 0 for that probe; the counters are informational, never a gate.
+func (c *LinuxCollector) Dropped() uint64 {
+	if c.closed {
+		return c.finalDropped
+	}
+	var total uint64
+	for _, m := range []*ebpf.Map{c.net.Dropped, c.proc.Dropped, c.file.Dropped} {
+		if m == nil {
+			continue
+		}
+		var perCPU []uint64
+		if err := m.Lookup(uint32(0), &perCPU); err != nil {
+			continue
+		}
+		for _, n := range perCPU {
+			total += n
+		}
+	}
+	return total
 }
 
 func (c *LinuxCollector) attach() error {
@@ -266,6 +314,8 @@ func (c *LinuxCollector) Close() error {
 			_ = r.Close()
 		}
 		c.wg.Wait()
+		c.finalDropped = c.Dropped()
+		c.closed = true
 		c.closeKernel()
 	})
 	return nil

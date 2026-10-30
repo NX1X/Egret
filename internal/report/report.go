@@ -128,6 +128,15 @@ func Markdown(s *event.Session) string {
 		fmt.Fprintf(&b, "## ✅ No violations\n\n")
 	}
 
+	// Coverage notes: facts about what this report can and cannot show.
+	if len(s.Notes) > 0 {
+		fmt.Fprintf(&b, "## ℹ️ Notes\n\n")
+		for _, n := range s.Notes {
+			fmt.Fprintf(&b, "- %s\n", mdEscape(n))
+		}
+		b.WriteString("\n")
+	}
+
 	if len(s.Connections) > 0 {
 		fmt.Fprintf(&b, "## 🌐 Connections\n\n")
 		fmt.Fprintf(&b, "| PID | Process | Destination | Port | Proto |\n|---|---|---|---|---|\n")

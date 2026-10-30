@@ -12,6 +12,17 @@ import (
 	"github.com/cilium/ebpf"
 )
 
+// Names of all BPF objects in the ELF.
+//
+// Used for safe lookups in a Collection or CollectionSpec.
+const (
+	processMapDropped              = "dropped"
+	processMapEvents               = "events"
+	processMapScopeCgroup          = "scope_cgroup"
+	processProgTraceExecve         = "trace_execve"
+	processVarUnusedEgretProcEvent = "unused_egret_proc_event"
+)
+
 // loadProcess returns the embedded CollectionSpec for process.
 func loadProcess() (*ebpf.CollectionSpec, error) {
 	reader := bytes.NewReader(_ProcessBytes)
@@ -32,7 +43,7 @@ func loadProcess() (*ebpf.CollectionSpec, error) {
 //	*processMaps
 //
 // See ebpf.CollectionSpec.LoadAndAssign documentation for details.
-func loadProcessObjects(obj interface{}, opts *ebpf.CollectionOptions) error {
+func loadProcessObjects(obj any, opts *ebpf.CollectionOptions) error {
 	spec, err := loadProcess()
 	if err != nil {
 		return err
@@ -47,9 +58,10 @@ func loadProcessObjects(obj interface{}, opts *ebpf.CollectionOptions) error {
 type processSpecs struct {
 	processProgramSpecs
 	processMapSpecs
+	processVariableSpecs
 }
 
-// processSpecs contains programs before they are loaded into the kernel.
+// processProgramSpecs contains programs before they are loaded into the kernel.
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type processProgramSpecs struct {
@@ -60,7 +72,16 @@ type processProgramSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type processMapSpecs struct {
-	Events *ebpf.MapSpec `ebpf:"events"`
+	Dropped     *ebpf.MapSpec `ebpf:"dropped"`
+	Events      *ebpf.MapSpec `ebpf:"events"`
+	ScopeCgroup *ebpf.MapSpec `ebpf:"scope_cgroup"`
+}
+
+// processVariableSpecs contains global variables before they are loaded into the kernel.
+//
+// It can be passed ebpf.CollectionSpec.Assign.
+type processVariableSpecs struct {
+	UnusedEgretProcEvent *ebpf.VariableSpec `ebpf:"unused_egret_proc_event"`
 }
 
 // processObjects contains all objects after they have been loaded into the kernel.
@@ -69,6 +90,7 @@ type processMapSpecs struct {
 type processObjects struct {
 	processPrograms
 	processMaps
+	processVariables
 }
 
 func (o *processObjects) Close() error {
@@ -82,13 +104,24 @@ func (o *processObjects) Close() error {
 //
 // It can be passed to loadProcessObjects or ebpf.CollectionSpec.LoadAndAssign.
 type processMaps struct {
-	Events *ebpf.Map `ebpf:"events"`
+	Dropped     *ebpf.Map `ebpf:"dropped"`
+	Events      *ebpf.Map `ebpf:"events"`
+	ScopeCgroup *ebpf.Map `ebpf:"scope_cgroup"`
 }
 
 func (m *processMaps) Close() error {
 	return _ProcessClose(
+		m.Dropped,
 		m.Events,
+		m.ScopeCgroup,
 	)
+}
+
+// processVariables contains all global variables after they have been loaded into the kernel.
+//
+// It can be passed to loadProcessObjects or ebpf.CollectionSpec.LoadAndAssign.
+type processVariables struct {
+	UnusedEgretProcEvent *ebpf.Variable `ebpf:"unused_egret_proc_event"`
 }
 
 // processPrograms contains all programs after they have been loaded into the kernel.

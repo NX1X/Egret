@@ -135,6 +135,37 @@ jobs:
             exit 1
           fi
           echo "eBPF probes loaded and recorded the curl connection."
+      # Issue #10: the report must contain only the build. A loop OUTSIDE Egret
+      # (like the runner's own Azure guest agent) connects to 1.1.1.1 while
+      # Egret monitors a build that connects to example.com. The build also
+      # runs `docker version`, which must produce the container note.
+      - name: Smoke test - probes record only the build (issue 10)
+        timeout-minutes: 3
+        shell: bash
+        run: |
+          out="${RUNNER_TEMP}/egret-scope"
+          ( for _ in $(seq 1 40); do curl -s -o /dev/null --max-time 2 https://1.1.1.1 || true; sleep 0.25; done ) &
+          noise=$!
+          sudo ./bin/egret run --mode audit --output-dir "${out}" -- \
+            bash -c 'sleep 2; curl -fsS --max-time 20 -o /dev/null https://example.com; docker version >/dev/null 2>&1 || true; sleep 2'
+          wait "${noise}" || true
+          r="${out}/report.json"
+          sudo jq -c '[.connections[] | {comm, daddr, dport}]' "${r}"
+          fail=0
+          if sudo jq -e '[.connections[] | select(.daddr == "1.1.1.1")] | length > 0' "${r}" >/dev/null; then
+            echo "::error::the report includes the outside loop's connections to 1.1.1.1 (probes not scoped to the build)"; fail=1
+          fi
+          if ! sudo jq -e '[.connections[] | select(.comm == "curl" and .dport == 443)] | length >= 1' "${r}" >/dev/null; then
+            echo "::error::the build's own curl connection is missing"; fail=1
+          fi
+          if sudo jq -e '[.violations[] | select(.kind == "monitor")] | length > 0' "${r}" >/dev/null; then
+            echo "::error::monitor violation (lost events or empty scope)"; sudo jq -c '.violations' "${r}"; fail=1
+          fi
+          if ! sudo jq -e '[.notes[]? | select(test("container client"))] | length == 1' "${r}" >/dev/null; then
+            echo "::error::the container note is missing"; sudo jq -c '.notes' "${r}"; fail=1
+          fi
+          [ "${fail}" -eq 0 ] && echo "Scope confirmed: only the build is recorded, and the container note is present."
+          exit "${fail}"
       - name: Verify module checksums
         run: go mod verify
       # govulncheck is NOT run here: it is a dedicated, required job in

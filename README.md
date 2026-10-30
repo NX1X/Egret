@@ -259,6 +259,11 @@ on GitHub-hosted / container runners it is still being validated - use `audit` m
 there for now.** Every change to the enforcer goes through a dedicated
 network-security review.
 
+Egret records only the build: the command it wraps and everything that
+command starts. Containers that the build starts through a container daemon
+(`docker build`, `docker run`) run outside the build, so their traffic is not
+in the report. The report says so when the build used a container client.
+
 ## Contributing
 
 Contributions go through a consistent review process, including a read-only
