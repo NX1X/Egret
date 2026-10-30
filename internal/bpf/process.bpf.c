@@ -2,8 +2,8 @@
 
 // process.bpf.c - observe process execution.
 //
-// Attaches to the sys_enter_execve tracepoint and emits one egret_proc_event per
-// exec. The egret_proc_event layout MUST match the Go procEvent struct in
+// Attaches to the sched_process_exec raw tracepoint and emits one
+// egret_proc_event per successful exec. The egret_proc_event layout MUST match the Go procEvent struct in
 // internal/collector/collector_linux.go.
 
 #include "vmlinux.h"
@@ -29,10 +29,19 @@ struct {
 	__uint(max_entries, 1 << 24);
 } events SEC(".maps");
 
-// Layout of the sys_enter_execve tracepoint args. CO-RE reads tolerate kernel
-// differences; the filename pointer is the first syscall argument.
-SEC("tracepoint/syscalls/sys_enter_execve")
-int trace_execve(struct trace_event_raw_sys_enter *ctx)
+// sched_process_exec fires once per SUCCESSFUL exec, after the new program is
+// in place, on whatever CPU the task runs. It is attached as a raw tracepoint
+// (BPF_RAW_TRACEPOINT_OPEN), not through a perf event.
+//
+// Why not the sys_enter_execve tracepoint used before: cilium attaches syscall
+// tracepoints through a perf event opened on CPU 0, and on newer kernels
+// (verified on 7.0, GitHub's ubuntu-latest) the program then ran only for tasks
+// on CPU 0, so most execs were never recorded and nothing counted the loss.
+//
+// Raw tracepoint args: (struct task_struct *p, pid_t old_pid,
+// struct linux_binprm *bprm). comm is already the new program's name here.
+SEC("raw_tracepoint/sched_process_exec")
+int trace_exec(struct bpf_raw_tracepoint_args *ctx)
 {
 	if (!in_scope())
 		return 0;
@@ -44,13 +53,14 @@ int trace_execve(struct trace_event_raw_sys_enter *ctx)
 	}
 
 	struct task_struct *task = (struct task_struct *)bpf_get_current_task();
+	struct linux_binprm *bprm = (struct linux_binprm *)ctx->args[2];
 
 	e->pid = bpf_get_current_pid_tgid() >> 32;
 	e->ppid = BPF_CORE_READ(task, real_parent, tgid);
 	bpf_get_current_comm(&e->comm, sizeof(e->comm));
 
-	const char *filename = (const char *)ctx->args[0];
-	bpf_probe_read_user_str(&e->filename, sizeof(e->filename), filename);
+	const char *filename = BPF_CORE_READ(bprm, filename);
+	bpf_probe_read_kernel_str(&e->filename, sizeof(e->filename), filename);
 
 	bpf_ringbuf_submit(e, 0);
 	return 0;

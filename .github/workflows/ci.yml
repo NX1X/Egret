@@ -137,23 +137,27 @@ jobs:
             exit 1
           fi
           echo "eBPF probes loaded and recorded the curl connection."
-      # TEMPORARY diagnostic: how many execs and writes do the probes record?
-      - name: Diagnostic - exec and file event counts
-        timeout-minutes: 3
+      # Every exec and every write must be recorded, whatever CPU it runs on.
+      # The probes used to be attached through perf events on CPU 0, and on
+      # newer kernels most execs and writes were silently lost.
+      - name: Smoke test - probes record every exec and write
+        timeout-minutes: 4
         shell: bash
         run: |
-          out="${RUNNER_TEMP}/egret-diag"
-          sudo ./bin/egret run --mode audit --output-dir "${out}" -- \
-            bash -c 'for i in $(seq 1 30); do /bin/true; done; for i in $(seq 1 30); do echo x > /tmp/egret-diag-$i; done; /usr/bin/env true'
-          sudo jq -c '{procs: (.processes|length), writes: (.file_writes|length), violations}' "${out}/report.json"
-          sudo jq -c '.processes[]? | {pid, ppid, comm, filename}' "${out}/report.json" | head -40
-          for pause in 0.5 2; do
+          out="${RUNNER_TEMP}/egret-count"
+          fail=0
+          for pause in 0 0 1; do
             sudo rm -rf "${out}"
             sudo ./bin/egret run --mode audit --output-dir "${out}" -- \
-              bash -c "sleep ${pause}; for i in \$(seq 1 30); do /bin/true; done"
-            echo "pause ${pause}s: $(sudo jq -c '[.processes[]? | select(.filename == "/bin/true")] | length' "${out}/report.json") of 30 /bin/true recorded"
+              bash -c "sleep ${pause}; for i in \$(seq 1 30); do /bin/true; done; for i in \$(seq 1 30); do echo x > /tmp/egret-count-\$i; done"
+            execs="$(sudo jq '[.processes[]? | select(.filename == "/bin/true")] | length' "${out}/report.json")"
+            writes="$(sudo jq '[.file_writes[]? | select(.path | startswith("/tmp/egret-count-"))] | length' "${out}/report.json")"
+            echo "pause ${pause}s: ${execs}/30 execs, ${writes}/30 writes; kernel $(uname -r)"
+            if [ "${execs}" -ne 30 ] || [ "${writes}" -ne 30 ]; then
+              echo "::error::the probes missed events (want 30/30 each)"; fail=1
+            fi
           done
-          uname -r
+          exit "${fail}"
       # Issue #10: the report must contain only the build. A loop OUTSIDE Egret
       # (like the runner's own Azure guest agent) connects to 1.1.1.1 while
       # Egret monitors a build that connects to example.com. The build also

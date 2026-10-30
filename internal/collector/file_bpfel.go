@@ -20,6 +20,7 @@ const (
 	fileMapEvents          = "events"
 	fileMapScopeCgroup     = "scope_cgroup"
 	fileProgTraceOpenat    = "trace_openat"
+	fileProgTraceOpenat2   = "trace_openat2"
 	fileVarUnusedFileEvent = "unused_file_event"
 )
 
@@ -65,7 +66,8 @@ type fileSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type fileProgramSpecs struct {
-	TraceOpenat *ebpf.ProgramSpec `ebpf:"trace_openat"`
+	TraceOpenat  *ebpf.ProgramSpec `ebpf:"trace_openat"`
+	TraceOpenat2 *ebpf.ProgramSpec `ebpf:"trace_openat2"`
 }
 
 // fileMapSpecs contains maps before they are loaded into the kernel.
@@ -128,12 +130,14 @@ type fileVariables struct {
 //
 // It can be passed to loadFileObjects or ebpf.CollectionSpec.LoadAndAssign.
 type filePrograms struct {
-	TraceOpenat *ebpf.Program `ebpf:"trace_openat"`
+	TraceOpenat  *ebpf.Program `ebpf:"trace_openat"`
+	TraceOpenat2 *ebpf.Program `ebpf:"trace_openat2"`
 }
 
 func (p *filePrograms) Close() error {
 	return _FileClose(
 		p.TraceOpenat,
+		p.TraceOpenat2,
 	)
 }
 

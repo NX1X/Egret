@@ -70,6 +70,7 @@ type LinuxCollector struct {
 	closeOnce sync.Once
 
 	userLost atomic.Uint64 // records read from a ring but not decodable
+	notes    []string      // coverage notes from attach (see Notes)
 
 	closed       bool   // set by Close; the maps are gone after it
 	finalDropped uint64 // drop count read by Close before it unloads the maps
@@ -170,7 +171,7 @@ func (c *LinuxCollector) Dropped() (uint64, error) {
 }
 
 func (c *LinuxCollector) attach() error {
-	// Kprobes: program fields are *ebpf.Program from the generated objects.
+	// Kprobes run on every CPU: the network connect probes and the file probe.
 	for _, p := range []struct {
 		sym  string
 		prog *ebpf.Program
@@ -184,22 +185,33 @@ func (c *LinuxCollector) attach() error {
 		}
 		c.links = append(c.links, l)
 	}
-	// Tracepoints.
-	for _, t := range []struct {
-		group, name string
-		prog        *ebpf.Program
-	}{
-		{"syscalls", "sys_enter_execve", c.proc.TraceExecve},
-		{"syscalls", "sys_enter_openat", c.file.TraceOpenat},
-	} {
-		l, err := link.Tracepoint(t.group, t.name, t.prog, nil)
-		if err != nil {
-			return fmt.Errorf("attaching tracepoint %s/%s: %w", t.group, t.name, err)
+
+	// Exec: a raw tracepoint, attached without a perf event, so it runs on
+	// every CPU. (A syscall tracepoint attached by cilium through a perf event
+	// on CPU 0 ran only for tasks on CPU 0 on newer kernels.)
+	l, err := link.AttachRawTracepoint(link.RawTracepointOptions{Name: "sched_process_exec", Program: c.proc.TraceExec})
+	if err != nil {
+		return fmt.Errorf("attaching raw tracepoint sched_process_exec: %w", err)
+	}
+	c.links = append(c.links, l)
+
+	// File writes: do_sys_openat2 when it can be probed (it can be inlined on
+	// some builds), else the openat syscall tracepoint, with a report note.
+	if l, err := link.Kprobe("do_sys_openat2", c.file.TraceOpenat2, nil); err == nil {
+		c.links = append(c.links, l)
+	} else {
+		l, terr := link.Tracepoint("syscalls", "sys_enter_openat", c.file.TraceOpenat, nil)
+		if terr != nil {
+			return fmt.Errorf("attaching the file probe: kprobe do_sys_openat2: %v; tracepoint sys_enter_openat: %w", err, terr)
 		}
 		c.links = append(c.links, l)
+		c.notes = append(c.notes, "File writes are watched through the openat syscall tracepoint, because do_sys_openat2 could not be probed on this kernel. On some kernels that tracepoint misses events, so file coverage may be incomplete.")
 	}
 	return nil
 }
+
+// Notes are coverage facts about how the probes were attached, for the report.
+func (c *LinuxCollector) Notes() []string { return c.notes }
 
 func (c *LinuxCollector) startReaders(ctx context.Context) error {
 	netRd, err := ringbuf.NewReader(c.net.Events)

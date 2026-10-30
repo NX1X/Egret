@@ -131,6 +131,8 @@ type Coverage struct {
 	KernelDropped uint64
 	// DropCountErr is set when the loss count could not be read in full.
 	DropCountErr error
+	// Notes from the collector (for example a probe fallback), added as-is.
+	Notes []string
 }
 
 // Finish adds the coverage findings to the session returned by Wait:
@@ -174,6 +176,7 @@ func (m *Monitor) Finish(cov Coverage) *event.Session {
 			Detail: "the probes saw no exec from the build cgroup, so this report may miss the whole build",
 		})
 	}
+	s.Notes = append(s.Notes, cov.Notes...)
 	if !cov.Scoped {
 		s.Notes = append(s.Notes, "Not scoped to the build: Egret could not create a build cgroup, so this report includes every process on the host.")
 	}

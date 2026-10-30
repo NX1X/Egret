@@ -142,6 +142,7 @@ func executeRun(cmd *cobra.Command, pol *policy.Policy, command []string, disabl
 		Scoped:        enf.ScopeID() != 0 && inScope,
 		KernelDropped: dropped,
 		DropCountErr:  dropErr,
+		Notes:         coll.Notes(),
 	})
 	session.StartedAt = startedAt
 	session.FinishedAt = time.Now()

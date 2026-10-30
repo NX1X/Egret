@@ -19,7 +19,7 @@ const (
 	processMapDropped              = "dropped"
 	processMapEvents               = "events"
 	processMapScopeCgroup          = "scope_cgroup"
-	processProgTraceExecve         = "trace_execve"
+	processProgTraceExec           = "trace_exec"
 	processVarUnusedEgretProcEvent = "unused_egret_proc_event"
 )
 
@@ -65,7 +65,7 @@ type processSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type processProgramSpecs struct {
-	TraceExecve *ebpf.ProgramSpec `ebpf:"trace_execve"`
+	TraceExec *ebpf.ProgramSpec `ebpf:"trace_exec"`
 }
 
 // processMapSpecs contains maps before they are loaded into the kernel.
@@ -128,12 +128,12 @@ type processVariables struct {
 //
 // It can be passed to loadProcessObjects or ebpf.CollectionSpec.LoadAndAssign.
 type processPrograms struct {
-	TraceExecve *ebpf.Program `ebpf:"trace_execve"`
+	TraceExec *ebpf.Program `ebpf:"trace_exec"`
 }
 
 func (p *processPrograms) Close() error {
 	return _ProcessClose(
-		p.TraceExecve,
+		p.TraceExec,
 	)
 }
 

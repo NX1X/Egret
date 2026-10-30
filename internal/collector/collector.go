@@ -32,6 +32,8 @@ type Collector interface {
 	Dropped() (uint64, error)
 	// SetScope sets which cgroup the probes record (0 = every task).
 	SetScope(cgroupID uint64) error
+	// Notes are coverage facts for the report (for example a probe fallback).
+	Notes() []string
 	// Close detaches all probes and releases kernel resources. Safe to call
 	// once; idempotency is the implementation's responsibility.
 	Close() error
