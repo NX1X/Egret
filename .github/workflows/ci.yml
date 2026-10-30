@@ -162,7 +162,7 @@ jobs:
             echo "::error::monitor violation (lost events or empty scope)"; sudo jq -c '.violations' "${r}"; fail=1
           fi
           if ! sudo jq -e '[.notes[]? | select(test("container client"))] | length == 1' "${r}" >/dev/null; then
-            echo "::error::the container note is missing"; sudo jq -c '.notes' "${r}"; fail=1
+            echo "::error::the container note is missing"; sudo jq -c '.notes, [.processes[] | {comm, filename}]' "${r}"; fail=1
           fi
           [ "${fail}" -eq 0 ] && echo "Scope confirmed: only the build is recorded, and the container note is present."
           exit "${fail}"
