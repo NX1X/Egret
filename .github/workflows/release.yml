@@ -72,8 +72,8 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           # Pin the patched toolchain (crypto/tls GO-2026-5856 + related stdlib
-          # advisories, plus GO-2026-6617, all fixed by go1.26.9) so the trust artifact is built vuln-free.
-          go-version: "1.26.9"
+          # advisories, plus GO-2026-6617 and GO-2026-6809, all fixed by go1.26.10) so the trust artifact is built vuln-free.
+          go-version: "1.26.10"
           # No build cache on the release/trust path: a cache entry populated by a
           # lower-privileged workflow (PR) must not be restorable here (cache poisoning).
           cache: false
