@@ -96,6 +96,7 @@ runs:
   using: "composite"
   steps:
     - name: Install Egret
+      id: install
       shell: bash
       env:
         EGRET_VERSION: ${{ inputs.version }}
@@ -133,6 +134,8 @@ runs:
         EGRET_CHECK_RUN: ${{ inputs.check-run }}
         EGRET_PR_COMMENT: ${{ inputs.pr-comment }}
         EGRET_DASHBOARD_ISSUE: ${{ inputs.dashboard-issue }}
+        # The sha256 the install step verified; the run step refuses any other binary.
+        EGRET_EXPECTED_SHA256: ${{ steps.install.outputs.sha256 }}
       run: "$GITHUB_ACTION_PATH/entrypoint.sh run"
 
     # always() so the SARIF still uploads when the wrapped build fails or a

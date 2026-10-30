@@ -3,6 +3,8 @@
 package action
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"os"
 	"os/exec"
@@ -53,7 +55,11 @@ case "$sub" in
       mkdir -p "${out}"
       v=""
       for ((i = 0; i < ${FAKE_VIOLATIONS:-0}; i++)); do v+="${v:+,}{\"kind\":\"connection\"}"; done
-      printf '{"violations":[%s]}\n' "${v}" > "${out}/report.json"
+      if [[ -n "${FAKE_REPORT_BODY:-}" ]]; then
+        printf '%s\n' "${FAKE_REPORT_BODY}" > "${out}/report.json"
+      else
+        printf '{"violations":[%s]}\n' "${v}" > "${out}/report.json"
+      fi
     fi
     exit "${FAKE_RC:-0}"
     ;;
@@ -66,6 +72,12 @@ case "$sub" in
   version) exit "${FAKE_VERSION_RC:-0}" ;;
 esac
 `
+
+// fakeEgretSHA is what the install step would publish for the fake binary.
+var fakeEgretSHA = func() string {
+	sum := sha256.Sum256([]byte(fakeEgret))
+	return hex.EncodeToString(sum[:])
+}()
 
 type runEnv struct {
 	dir, shim, runnerTemp, bin, outdir, outputs string
@@ -108,6 +120,7 @@ func (e *runEnv) run(t *testing.T, extra ...string) (string, int) {
 		"GITHUB_OUTPUT=" + e.outputs,
 		"EGRET_COMMAND=true",
 		"EGRET_MODE=audit",
+		"EGRET_EXPECTED_SHA256=" + fakeEgretSHA,
 	}, extra...)
 	out, err := cmd.CombinedOutput()
 	var ee *exec.ExitError
@@ -238,5 +251,33 @@ func TestRunRejectsAnUnknownMode(t *testing.T) {
 	out, code := e.run(t, "EGRET_MODE=enforce")
 	if code == 0 || !strings.Contains(out, "mode must be audit or block") {
 		t.Errorf("exit %d, want a clear rejection:\n%s", code, out)
+	}
+}
+
+// Regression: a report the action could not parse counted as 0 violations, so
+// fail-on-violations passed a run whose result was never checked.
+func TestRunFailsClosedWhenViolationsCannotBeCounted(t *testing.T) {
+	e := newRunEnv(t)
+	out, code := e.run(t, "FAKE_REPORT_BODY={not json", "EGRET_FAIL_ON_VIOLATIONS=true")
+	if code == 0 {
+		t.Fatalf("run passed with an unreadable report:\n%s", out)
+	}
+	if !strings.Contains(out, "Could not count the violations") {
+		t.Errorf("missing the fail-closed message:\n%s", out)
+	}
+}
+
+// Regression: the run step copied whatever sat in the runner-owned install
+// directory. It must refuse a binary that differs from the one the install
+// step verified, and refuse to run without that digest.
+func TestRunRefusesABinaryChangedAfterInstall(t *testing.T) {
+	e := newRunEnv(t)
+	out, code := e.run(t, "EGRET_EXPECTED_SHA256="+strings.Repeat("0", 64))
+	if code == 0 || !strings.Contains(out, "changed after the install step verified it") {
+		t.Fatalf("exit %d, want a refusal:\n%s", code, out)
+	}
+	out, code = e.run(t, "EGRET_EXPECTED_SHA256=")
+	if code == 0 || !strings.Contains(out, "verified sha256 is missing") {
+		t.Fatalf("exit %d, want a refusal without the digest:\n%s", code, out)
 	}
 }

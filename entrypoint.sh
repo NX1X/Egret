@@ -19,7 +19,10 @@ BIN="${INSTALL_DIR}/egret"
 ASSET="egret_linux_amd64"
 # The keyless cosign signing identity for a release (Fulcio cert subject +
 # OIDC issuer). Used to verify SHA256SUMS.bundle. Kept in sync with release.yml.
-COSIGN_IDENTITY_RE='^https://github.com/NX1X/Egret/\.github/workflows/release\.yml@.*'
+# The identity is pinned to the exact tag being installed (cosign_identity), so
+# a signature from the release workflow run on any other ref (a branch, or a
+# different tag) is refused. Every release so far was signed from its tag push.
+COSIGN_IDENTITY_PREFIX='https://github.com/NX1X/Egret/.github/workflows/release.yml@refs/tags/'
 COSIGN_OIDC_ISSUER='https://token.actions.githubusercontent.com'
 
 # Network hardening for every release fetch. A bare `curl -fsSL` has no timeout
@@ -131,8 +134,18 @@ parse_tag_name() {
 #   - cosign absent, EGRET_REQUIRE_SIGNATURE=true -> fail closed (strict opt-in)
 #   - cosign absent, default                -> warn, fall back to checksum-only
 #     (GitHub-hosted runners don't ship cosign; don't break the default install)
+# cosign_identity <tag> - the exact certificate identity for a release tag.
+cosign_identity() { printf '%s%s' "${COSIGN_IDENTITY_PREFIX}" "$1"; }
+
+# valid_release_tag <tag> - only vMAJOR.MINOR.PATCH. The tag is placed in
+# release download URLs, so anything else (for example "../../other/repo/...")
+# could make curl fetch another repository's release.
+valid_release_tag() { [[ "$1" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; }
+
 verify_signature() {
   local tag="$1" sums="$2"
+  local identity
+  identity="$(cosign_identity "${tag}")"
   local bundle="${INSTALL_DIR}/SHA256SUMS.bundle"
   local url="https://github.com/${REPO}/releases/download/${tag}/SHA256SUMS.bundle"
 
@@ -151,13 +164,13 @@ verify_signature() {
   fi
   if ! cosign verify-blob \
         --bundle "${bundle}" \
-        --certificate-identity-regexp "${COSIGN_IDENTITY_RE}" \
+        --certificate-identity "${identity}" \
         --certificate-oidc-issuer "${COSIGN_OIDC_ISSUER}" \
         "${sums}" >/dev/null 2>&1; then
     echo "::error::cosign signature verification failed for SHA256SUMS (${tag}); refusing to run a binary whose release signature does not match ${REPO}'s release workflow identity."
     return 1
   fi
-  echo "Verified SHA256SUMS signature with cosign (identity ${COSIGN_IDENTITY_RE}, issuer ${COSIGN_OIDC_ISSUER})."
+  echo "Verified SHA256SUMS signature with cosign (identity ${identity}, issuer ${COSIGN_OIDC_ISSUER})."
 }
 
 # verify_checksum <tag> - download the release SHA256SUMS, verify its cosign
@@ -187,6 +200,14 @@ verify_checksum() {
   echo "Verified ${ASSET} against SHA256SUMS."
 }
 
+# publish_digest - record the installed binary's sha256 as the install step's
+# `sha256` output. The run step compares its root-owned copy against it, so a
+# binary swapped in the runner-owned install directory after this step is
+# refused. A later step cannot change an earlier step's outputs.
+publish_digest() {
+  out "sha256" "$(sha256sum "${BIN}" | awk '{print $1}')"
+}
+
 cmd_install() {
   mkdir -p "${INSTALL_DIR}"
   local version="${EGRET_VERSION:-latest}"
@@ -212,6 +233,13 @@ cmd_install() {
     fi
   fi
 
+  # Check both a pinned version and the tag the API returned for "latest".
+  if [[ -n "${tag}" ]] && ! valid_release_tag "${tag}"; then
+    echo "::error::version must be 'latest' or a release tag like v0.4.0 (vMAJOR.MINOR.PATCH); got '${tag}'."
+    echo "::endgroup::"
+    exit 1
+  fi
+
   if [[ -n "${tag}" ]]; then
     local url="https://github.com/${REPO}/releases/download/${tag}/${ASSET}"
     echo "Downloading ${url}"
@@ -219,6 +247,7 @@ cmd_install() {
     if fetch "${url}" "${BIN}" 300; then
       verify_checksum "${tag}"   # fails closed on mismatch / missing sums
       chmod +x "${BIN}"
+      publish_digest
       echo "${INSTALL_DIR}" >> "${GITHUB_PATH}"
       echo "::endgroup::"
       return 0
@@ -236,22 +265,27 @@ cmd_install() {
   echo "Building egret from source (allow-build-from-source=true; unverified/unpinned)"
   make -C "${GITHUB_ACTION_PATH}" generate build
   cp "${GITHUB_ACTION_PATH}/bin/egret" "${BIN}"
+  publish_digest
   echo "${INSTALL_DIR}" >> "${GITHUB_PATH}"
   echo "::endgroup::"
 }
 
 # count_violations <report.json> - number of entries in the "violations" array,
-# using jq when present, else python3, else a conservative 0.
+# using jq when present, else python3. Fails (returns 1, prints nothing) when the
+# report cannot be read or neither tool exists: "0 violations" must never stand
+# in for "could not count", because fail-on-violations and the outputs trust it.
 count_violations() {
-  local f="$1"
-  [[ -f "${f}" ]] || { echo 0; return; }
+  local f="$1" n=""
+  [[ -f "${f}" ]] || return 1
   if command -v jq >/dev/null 2>&1; then
-    jq '.violations | length' "${f}" 2>/dev/null || echo 0
+    n="$(jq '.violations | length' "${f}" 2>/dev/null)" || return 1
   elif command -v python3 >/dev/null 2>&1; then
-    python3 -c 'import json,sys; print(len((json.load(open(sys.argv[1])) or {}).get("violations") or []))' "${f}" 2>/dev/null || echo 0
+    n="$(python3 -c 'import json,sys; print(len((json.load(open(sys.argv[1])) or {}).get("violations") or []))' "${f}" 2>/dev/null)" || return 1
   else
-    echo 0
+    return 1
   fi
+  [[ "${n}" =~ ^[0-9]+$ ]] || return 1
+  echo "${n}"
 }
 
 # out <key> <value> - append a step output using the delimiter form, so a value
@@ -305,6 +339,19 @@ cmd_run() {
   # shellcheck disable=SC2064  # expand safe_dir now; it is local to this function
   trap "sudo rm -rf -- '${safe_dir}'" EXIT
   local safe_bin="${safe_dir}/egret"
+
+  # The copy must be the binary the install step verified: ${BIN} sits in a
+  # runner-owned directory between the two steps.
+  local want_sha="${EGRET_EXPECTED_SHA256:-}" got_sha
+  got_sha="$(sudo sha256sum "${safe_bin}" | awk '{print $1}')"
+  if [[ ! "${want_sha}" =~ ^[0-9a-f]{64}$ ]]; then
+    echo "::error::The install step's verified sha256 is missing (EGRET_EXPECTED_SHA256), so Egret cannot prove this binary is the one it verified. Run Egret through the action, which sets it."
+    exit 1
+  fi
+  if [[ "${got_sha}" != "${want_sha}" ]]; then
+    echo "::error::The Egret binary changed after the install step verified it (expected sha256 ${want_sha}, got ${got_sha}). Refusing to run it as root."
+    exit 1
+  fi
   local safe_out="${safe_dir}/report"
 
   local args=(run --output-dir "${safe_out}")
@@ -409,7 +456,10 @@ cmd_run() {
   fi
 
   local violations
-  violations="$(count_violations "${reportjson}")"
+  if ! violations="$(count_violations "${reportjson}")"; then
+    echo "::error::Could not count the violations in ${reportjson} (it needs jq or python3, and a readable report). Refusing to report a result that was not checked."
+    exit 1
+  fi
 
   out "report-dir" "${outdir}"
   out "sarif-file" "${sarif}"

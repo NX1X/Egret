@@ -340,3 +340,47 @@ func TestDoReturnsErrorOnNon2xx(t *testing.T) {
 		t.Error("expected error on 403")
 	}
 }
+
+func TestClientDoesNotFollowRedirects(t *testing.T) {
+	var leakedAuth string
+	other := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		leakedAuth = r.Header.Get("Authorization") + "(reached)"
+		w.Write([]byte(`[]`))
+	}))
+	defer other.Close()
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, other.URL+r.URL.Path, http.StatusFound)
+	}))
+	defer ts.Close()
+	t.Setenv("GITHUB_API_URL", ts.URL)
+
+	err := NewClient("tok").UpsertStickyComment(context.Background(), "o", "r", 1, "<!-- m -->", "body")
+	if err == nil {
+		t.Error("a redirect must surface as an error")
+	}
+	if leakedAuth != "" {
+		t.Fatalf("request followed the redirect: %q", leakedAuth)
+	}
+}
+
+func TestCapBody(t *testing.T) {
+	small := "<!-- egret -->\nshort"
+	if capBody(small) != small {
+		t.Error("a small body must pass unchanged")
+	}
+	var b strings.Builder
+	b.WriteString("<!-- egret -->\n| a | b |\n|---|---|\n")
+	for b.Len() < 300_000 {
+		b.WriteString("| é | row |\n")
+	}
+	got := capBody(b.String())
+	if n := len([]rune(got)); n > 65_536 {
+		t.Fatalf("capped body is %d characters, over GitHub's 65,536", n)
+	}
+	if !strings.HasPrefix(got, "<!-- egret -->\n") {
+		t.Error("the marker must survive the cut")
+	}
+	if !strings.Contains(got, "|\n\n> **Truncated.**") {
+		t.Errorf("the cut must fall after a whole row and add the note, tail: %q", got[len(got)-200:])
+	}
+}
