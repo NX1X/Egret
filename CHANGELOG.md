@@ -28,6 +28,9 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   in it, it records the whole host as before and says so in a report note.
   In audit mode the build runs as root and can leave the cgroup, so audit mode
   is not a boundary against a hostile build.
+- **PR comments and the dashboard issue update for busy builds.** GitHub
+  rejects a body over 65,536 characters, so the comment or issue was not
+  updated at all. The body is now cut at a line break with a note.
 
 ### Added
 
@@ -53,6 +56,24 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `DBUS_SESSION_BUS_ADDRESS` and `XDG_RUNTIME_DIR` are removed from the build's
   environment. Before, `systemd-run --user` could start a process outside the
   build cgroup, where neither the egress filter nor the probes apply.
+- **Report text from the build can no longer format, link or mention.** Strings
+  the build controls (file names, process names, destinations) are now escaped
+  for HTML, links and images, and formatting. An `@mention`, a `#123` reference
+  or a URL gets a zero-width space, so it cannot notify anyone or become a
+  link. This applies to the job summary, the PR comment and the dashboard
+  issue.
+- **The `version` input must be `latest` or a release tag** (`vMAJOR.MINOR.PATCH`).
+  It is placed in download URLs, so a crafted value could point the download
+  at another repository's release.
+- **The release signature must come from the exact tag.** The cosign identity
+  is now `release.yml@refs/tags/<the tag being installed>`, not any ref.
+- **The run step refuses a binary that changed after install.** The install
+  step publishes the verified sha256, and the run step compares its root-owned
+  copy against it.
+- **No redirects with a token.** The GitHub and dashboard clients no longer
+  follow redirects, so a bearer token reaches only the host it was meant for.
+- **An uncountable report fails the run.** When the action could not read the
+  violation count (no `jq` or `python3`, or a broken report), it counted 0.
 
 ### Changed (upgrade impact)
 

@@ -194,3 +194,40 @@ func TestMarkdownRendersNotes(t *testing.T) {
 		t.Error("a session without notes must not render a Notes section")
 	}
 }
+
+func TestMdEscapeNeutralisesMarkdown(t *testing.T) {
+	cases := map[string]string{
+		"a|b":                    `a\|b`,
+		"x\n## ✅ No violations":  "x␊#\u200b#\u200b ✅ No violations",
+		"<img src=x onerror=1>":  "&lt;img src=x onerror=1&gt;",
+		"[click](https://evil)":  `\[click\](https:` + "\u200b" + `//evil)`,
+		"ping @NX1X":             "ping @\u200bNX1X",
+		"fixes #1":               "fixes #\u200b1",
+		"www.evil.example":       "www\u200b.evil.example",
+		`back\slash *b* _i_ ~s~`: `back\\slash \*b\* \_i\_ \~s\~`,
+		"a&b":                    "a&amp;b",
+		"`code`":                 "'code'",
+	}
+	for in, want := range cases {
+		if got := mdEscape(in); got != want {
+			t.Errorf("mdEscape(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestMdEscapeCutsAtCharacterBoundary(t *testing.T) {
+	s := strings.Repeat("a", mdEscapeMaxLen-1) + "é" // é is 2 bytes and straddles the cap
+	got := mdEscape(s)
+	if !utf8.ValidString(got) {
+		t.Fatalf("cut produced invalid UTF-8: %q", got[len(got)-8:])
+	}
+	if !strings.HasSuffix(got, "…") {
+		t.Error("a cut value must end with …")
+	}
+}
+
+func TestRedactCommandKeepsCodeSpanReadable(t *testing.T) {
+	if got := redactCommand([]string{"my_tool[1]"}); got != "`my_tool[1]`" {
+		t.Errorf("code span got backslash escapes: %q", got)
+	}
+}

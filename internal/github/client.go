@@ -22,9 +22,13 @@ import (
 	"os"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 const (
+	// maxBodyRunes keeps a comment or issue body under GitHub's limit of
+	// 65,536 characters, with room for the truncation note.
+	maxBodyRunes = 65_000
 	maxRespBytes = 5 << 20 // cap decoded response bodies (memory safety)
 	maxPages     = 10      // cap list pagination at 10*100 = 1000 items
 )
@@ -51,7 +55,12 @@ func NewClient(token string) *Client {
 	return &Client{
 		token:   token,
 		baseURL: base,
-		http:    &http.Client{Timeout: 15 * time.Second},
+		// No redirects: the token must reach only the validated base URL. The
+		// API's own redirects (a renamed repository) surface as an error.
+		http: &http.Client{
+			Timeout:       15 * time.Second,
+			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+		},
 	}
 }
 
@@ -207,7 +216,7 @@ func (c *Client) UpsertStickyComment(ctx context.Context, owner, repo string, is
 	if err != nil {
 		return err
 	}
-	full := marker + "\n" + body
+	full := capBody(marker + "\n" + body)
 	for _, cm := range comments {
 		if cm.User.Type == "Bot" && strings.Contains(cm.Body, marker) {
 			return c.do(ctx, http.MethodPatch,
@@ -237,7 +246,7 @@ func (c *Client) UpsertDashboardIssue(ctx context.Context, owner, repo, title, m
 	if err != nil {
 		return 0, err
 	}
-	full := marker + "\n" + body
+	full := capBody(marker + "\n" + body)
 	for _, is := range issues {
 		if is.PullRequest != nil { // /issues includes PRs - never treat one as the dashboard
 			continue
@@ -258,6 +267,32 @@ func (c *Client) UpsertDashboardIssue(ctx context.Context, owner, repo, title, m
 		return 0, err
 	}
 	return created.Number, nil
+}
+
+// capBody keeps a comment or issue body within GitHub's size limit. A report
+// for a busy build is far larger, and GitHub rejects the whole request, so the
+// comment or dashboard was not updated at all. It cuts at a line break, so no
+// table row is split, and says where the full report is. The marker is at the
+// start of the body and is always kept.
+func capBody(body string) string {
+	if utf8.RuneCountInString(body) <= maxBodyRunes {
+		return body
+	}
+	const note = "\n\n> **Truncated.** This report is longer than a GitHub comment can hold. " +
+		"The full report is `report.md` / `report.json` in the job's report directory, and the job summary.\n"
+	keep := maxBodyRunes - utf8.RuneCountInString(note)
+	cut := 0
+	for i := range body { // i walks rune starts; stop at the keep-th rune
+		if keep == 0 {
+			cut = i
+			break
+		}
+		keep--
+	}
+	if nl := strings.LastIndexByte(body[:cut], '\n'); nl > 0 {
+		cut = nl
+	}
+	return body[:cut] + note
 }
 
 // --- pull-request plumbing (for `egret audit --open-pr`) ---

@@ -31,6 +31,11 @@ func entrypointPath(t *testing.T) string {
 // accidental network call fails fast instead of reaching GitHub.
 func runInstall(t *testing.T, token string) (string, int) {
 	t.Helper()
+	return runInstallVersion(t, token, "latest")
+}
+
+func runInstallVersion(t *testing.T, token, version string) (string, int) {
+	t.Helper()
 	dir := t.TempDir()
 	cmd := exec.Command("bash", entrypointPath(t), "install")
 	cmd.Env = []string{
@@ -38,7 +43,7 @@ func runInstall(t *testing.T, token string) (string, int) {
 		"HOME=" + dir,
 		"RUNNER_TEMP=" + dir,
 		"GITHUB_PATH=" + filepath.Join(dir, "github_path"),
-		"EGRET_VERSION=latest",
+		"EGRET_VERSION=" + version,
 		"EGRET_GITHUB_TOKEN=" + token,
 		"https_proxy=http://127.0.0.1:9", "HTTPS_PROXY=http://127.0.0.1:9",
 		"http_proxy=http://127.0.0.1:9", "HTTP_PROXY=http://127.0.0.1:9",
@@ -124,5 +129,22 @@ func TestValidTokenAlphabet(t *testing.T) {
 		if got := err == nil; got != want {
 			t.Errorf("valid_token(%q) = %v, want %v", tok, got, want)
 		}
+	}
+}
+
+// The version input goes into release download URLs. Anything but a release tag
+// (or "latest") is refused before any download, so "../.." cannot point curl at
+// another repository's release.
+func TestInstallRejectsAMalformedVersion(t *testing.T) {
+	for _, v := range []string{"../../attacker/repo/releases/download/v1.0.0", "v1.0", "main", "v1.0.0;id", "v1.0.0-rc1"} {
+		t.Run(v, func(t *testing.T) {
+			out, code := runInstallVersion(t, "", v)
+			if code != 1 || !strings.Contains(out, "version must be 'latest' or a release tag") {
+				t.Fatalf("exit %d, want 1 with the version error:\n%s", code, out)
+			}
+			if strings.Contains(out, "Downloading") {
+				t.Errorf("tried to download before validating:\n%s", out)
+			}
+		})
 	}
 }

@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/NX1X/Egret/internal/event"
 	"github.com/NX1X/Egret/internal/policy"
@@ -180,7 +181,7 @@ func redactCommand(argv []string) string {
 	if len(argv) == 0 {
 		return "_(none)_"
 	}
-	prog := "`" + mdEscape(argv[0]) + "`"
+	prog := "`" + mdEscapeCode(argv[0]) + "`"
 	if len(argv) == 1 {
 		return prog
 	}
@@ -199,23 +200,72 @@ func checkbox(b bool) string {
 // report or the job summary.
 const mdEscapeMaxLen = 512
 
-// mdEscape neutralises characters that would let an attacker-controlled string
-// (a filename, comm, or destination captured from the untrusted build) break
-// out of a Markdown table cell. Beyond pipe and backtick it must also strip
-// CR/LF: Linux filenames may contain any byte except NUL and '/', so a value
-// like "evil\n\n## ✅ No violations\n| ... |" would otherwise inject new
-// rows/headers into the very report reviewers trust. Newlines and tabs collapse
-// to a visible marker instead of a real line break.
+// mdEscape neutralises an attacker-controlled string (a filename, comm, or
+// destination captured from the untrusted build) before it goes into the
+// report. The same Markdown is posted as the job summary, the PR comment and
+// the dashboard issue, so it must not:
+//   - break out of a table cell: pipe, backtick, CR/LF and tab. Linux
+//     filenames may contain any byte except NUL and '/', so a value like
+//     "evil\n\n## ✅ No violations\n| ... |" would otherwise inject rows or
+//     headers into the report reviewers trust;
+//   - render as HTML, a link or an image: < > & and [ ];
+//   - change formatting: backslash, * _ ~;
+//   - notify people or link issues: an @mention or a #123 reference gets a
+//     zero-width space after the @ or #;
+//   - become a clickable link: "://" and "www." get a zero-width space too.
+//
+// The zero-width spaces are invisible but are copied with the text.
 func mdEscape(s string) string {
-	if len(s) > mdEscapeMaxLen {
-		s = s[:mdEscapeMaxLen] + "…"
-	}
-	replacer := strings.NewReplacer(
-		"|", "\\|",
-		"`", "'",
-		"\r", "␍", // ␍
-		"\n", "␊", // ␊
-		"\t", " ",
-	)
-	return replacer.Replace(s)
+	return mdEscaper.Replace(capCell(s))
 }
+
+// mdEscapeCode escapes a string shown inside a code span. Mentions, links and
+// HTML are inert there, and backslash escapes would show literally, so only
+// what can end the span or the table cell is handled.
+func mdEscapeCode(s string) string {
+	return codeEscaper.Replace(capCell(s))
+}
+
+// capCell cuts s to mdEscapeMaxLen bytes at a character boundary, so a cut
+// never leaves half of a multi-byte character.
+func capCell(s string) string {
+	if len(s) <= mdEscapeMaxLen {
+		return s
+	}
+	cut := mdEscapeMaxLen
+	for cut > 0 && !utf8.RuneStart(s[cut]) {
+		cut--
+	}
+	return s[:cut] + "…"
+}
+
+const zwsp = "\u200b"
+
+var mdEscaper = strings.NewReplacer(
+	"\\", "\\\\",
+	"|", "\\|",
+	"`", "'",
+	"\r", "␍",
+	"\n", "␊",
+	"\t", " ",
+	"<", "&lt;",
+	">", "&gt;",
+	"&", "&amp;",
+	"[", "\\[",
+	"]", "\\]",
+	"*", "\\*",
+	"_", "\\_",
+	"~", "\\~",
+	"@", "@"+zwsp,
+	"#", "#"+zwsp,
+	"://", ":"+zwsp+"//",
+	"www.", "www"+zwsp+".",
+)
+
+var codeEscaper = strings.NewReplacer(
+	"|", "\\|",
+	"`", "'",
+	"\r", "␍",
+	"\n", "␊",
+	"\t", " ",
+)

@@ -106,7 +106,14 @@ func Post(ctx context.Context, endpoint, token string, env *Envelope) error {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
 
-	client := &http.Client{Timeout: 10 * time.Second}
+	// Never follow a redirect: the dashboard answers the POST itself, and a
+	// redirect would resend the bearer token (and the report) to wherever the
+	// Location header points, which requireSecureEndpoint never checked. A 3xx
+	// therefore surfaces below as an error.
+	client := &http.Client{
+		Timeout:       10 * time.Second,
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("posting to %s: %w", endpoint, err)

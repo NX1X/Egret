@@ -133,3 +133,25 @@ func TestPostNoTokenOmitsAuth(t *testing.T) {
 		t.Error("Authorization header should be absent when token is empty")
 	}
 }
+
+// A redirect must never carry the token (or the report) to another server.
+func TestPostDoesNotFollowRedirects(t *testing.T) {
+	var leaked bool
+	other := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		leaked = true
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	defer other.Close()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, other.URL+"/ingest", http.StatusTemporaryRedirect)
+	}))
+	defer srv.Close()
+
+	env := NewEnvelope(&event.Session{Mode: "audit"}, RunMeta{}, "v1")
+	if err := Post(context.Background(), srv.URL, "sekret", env); err == nil {
+		t.Error("a 307 from the dashboard must be an error, not a silent success")
+	}
+	if leaked {
+		t.Fatal("the request (with the bearer token) was resent to the redirect target")
+	}
+}
