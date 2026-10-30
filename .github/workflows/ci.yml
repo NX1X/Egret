@@ -147,8 +147,13 @@ jobs:
             bash -c 'for i in $(seq 1 30); do /bin/true; done; for i in $(seq 1 30); do echo x > /tmp/egret-diag-$i; done; /usr/bin/env true'
           sudo jq -c '{procs: (.processes|length), writes: (.file_writes|length), violations}' "${out}/report.json"
           sudo jq -c '.processes[]? | {pid, ppid, comm, filename}' "${out}/report.json" | head -40
-          echo "--- unscoped probe check: same loop outside Egret while Egret watches 'sleep 3'"
-          uname -r; cat /proc/sys/kernel/perf_event_paranoid
+          for pause in 0.5 2; do
+            sudo rm -rf "${out}"
+            sudo ./bin/egret run --mode audit --output-dir "${out}" -- \
+              bash -c "sleep ${pause}; for i in \$(seq 1 30); do /bin/true; done"
+            echo "pause ${pause}s: $(sudo jq -c '[.processes[]? | select(.filename == "/bin/true")] | length' "${out}/report.json") of 30 /bin/true recorded"
+          done
+          uname -r
       # Issue #10: the report must contain only the build. A loop OUTSIDE Egret
       # (like the runner's own Azure guest agent) connects to 1.1.1.1 while
       # Egret monitors a build that connects to example.com. The build also
