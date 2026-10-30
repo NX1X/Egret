@@ -3,7 +3,7 @@
 Notable changes to Egret, following [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.5.0] - Reports that show the whole build and only the build
 
 ### Fixed
 
@@ -439,6 +439,7 @@ generation - shipped as a CLI and a GitHub Action, with no server and no phone-h
 - **Hardened by default:** no phone-home; egress/event records are metadata only
   (never payloads); block mode is fail-closed on teardown.
 
+[0.5.0]: https://github.com/NX1X/Egret/releases/tag/v0.5.0
 [0.4.0]: https://github.com/NX1X/Egret/releases/tag/v0.4.0
 [0.3.0]: https://github.com/NX1X/Egret/releases/tag/v0.3.0
 [0.2.0]: https://github.com/NX1X/Egret/releases/tag/v0.2.0
