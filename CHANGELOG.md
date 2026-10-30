@@ -7,6 +7,15 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Process and file monitoring record every event.** The exec and file
+  probes were attached through a perf event on CPU 0, and on newer kernels
+  (7.0, GitHub's current `ubuntu-latest`) they then ran only for tasks on
+  CPU 0. Most execs and file writes were lost, and nothing counted the loss;
+  the v0.4.0 self-test report shows "Processes: 0". Exec now uses the
+  `sched_process_exec` raw tracepoint (successful execs only, and the process
+  name is the new program), and file writes use a kprobe on `do_sys_openat2`,
+  which `open`, `creat`, `openat` and `openat2` all reach. CI now checks that
+  30 of 30 execs and 30 of 30 writes are recorded.
 - **Reports contain only the build** ([#10](https://github.com/NX1X/Egret/issues/10)).
   The probes recorded every process on the host, so the Azure guest agent's
   connections to `168.63.129.16` on GitHub-hosted runners showed up as raw-IP
