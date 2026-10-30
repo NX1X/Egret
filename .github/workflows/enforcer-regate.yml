@@ -54,8 +54,8 @@ jobs:
     # --privileged grants CAP_BPF + nftables; the cgroup ns is still the container's.
     container:
       # Digest-pinned; Renovate maintains. Bumped to Go 1.26 to match the rest of
-      # the repo (go.mod go1.26.9).
-      image: golang:1.26.9-bookworm@sha256:d9c68c2c51161e12fd77e4c6320687c9cd86e1af1e3ad6e6cd63ff970641453c
+      # the repo (go.mod go1.26.10).
+      image: golang:1.26.10-bookworm@sha256:23ce71337b726608afb1bc00986e630a05034a87a87ea1fc2cd1ae5cf33387eb
       options: --privileged
     continue-on-error: true # informative until the expected outcome is confirmed
     steps:
