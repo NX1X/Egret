@@ -51,6 +51,8 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Security
 
+- **Built with Go 1.26.10.** It fixes GO-2026-6809 (CVE-2026-111943): Go's
+  `crypto/x509` did not distrust some compromised intermediate certificates.
 - **Block mode hides the build user's systemd session bus.** `/run/user/<uid>`
   is covered by an empty mount in the build's private mount namespace, and
   `DBUS_SESSION_BUS_ADDRESS` and `XDG_RUNTIME_DIR` are removed from the build's
