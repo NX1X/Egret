@@ -128,6 +128,7 @@ jobs:
           sudo ./bin/egret run --mode audit --output-dir "${out}" -- \
             curl -fsS --connect-timeout 10 --max-time 30 https://example.com -o /dev/null
           sudo test -s "${out}/report.json" || { echo "::error::egret wrote no report.json"; exit 1; }
+          echo "processes:"; sudo jq -c '.processes[] | {pid, ppid, comm, filename}' "${out}/report.json"
           if ! sudo jq -e '[.connections[]? | select(.comm == "curl" and .dport == 443)] | length >= 1' \
               "${out}/report.json" >/dev/null; then
             echo "::error::the eBPF network probe did not record the curl connection to port 443"
@@ -151,6 +152,8 @@ jobs:
           wait "${noise}" || true
           r="${out}/report.json"
           sudo jq -c '[.connections[] | {comm, daddr, dport}]' "${r}"
+          echo "processes:"; sudo jq -c '.processes[] | {pid, ppid, comm, filename}' "${r}"
+          echo "violations:"; sudo jq -c '.violations' "${r}"
           fail=0
           if sudo jq -e '[.connections[] | select(.daddr == "1.1.1.1")] | length > 0' "${r}" >/dev/null; then
             echo "::error::the report includes the outside loop's connections to 1.1.1.1 (probes not scoped to the build)"; fail=1
