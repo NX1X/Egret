@@ -13,6 +13,7 @@
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_core_read.h>
 #include <bpf/bpf_tracing.h>
+#include "scope.h"
 
 char LICENSE[] SEC("license") = "GPL";
 
@@ -47,8 +48,10 @@ struct {
 static __always_inline int submit_tcp4(struct sockaddr_in *sin)
 {
 	struct conn_event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
-	if (!e)
+	if (!e) {
+		count_drop();
 		return 0;
+	}
 
 	e->pid = bpf_get_current_pid_tgid() >> 32;
 	e->proto = IPPROTO_TCP;
@@ -67,8 +70,10 @@ static __always_inline int submit_tcp4(struct sockaddr_in *sin)
 static __always_inline int submit_tcp6(struct sockaddr_in6 *sin6)
 {
 	struct conn_event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
-	if (!e)
+	if (!e) {
+		count_drop();
 		return 0;
+	}
 
 	e->pid = bpf_get_current_pid_tgid() >> 32;
 	e->proto = IPPROTO_TCP;
@@ -87,6 +92,8 @@ static __always_inline int submit_tcp6(struct sockaddr_in6 *sin6)
 SEC("kprobe/tcp_v4_connect")
 int BPF_KPROBE(trace_tcp_v4_connect, struct sock *sk, struct sockaddr *uaddr)
 {
+	if (!in_scope())
+		return 0;
 	return submit_tcp4((struct sockaddr_in *)uaddr);
 }
 
@@ -94,5 +101,7 @@ int BPF_KPROBE(trace_tcp_v4_connect, struct sock *sk, struct sockaddr *uaddr)
 SEC("kprobe/tcp_v6_connect")
 int BPF_KPROBE(trace_tcp_v6_connect, struct sock *sk, struct sockaddr *uaddr)
 {
+	if (!in_scope())
+		return 0;
 	return submit_tcp6((struct sockaddr_in6 *)uaddr);
 }

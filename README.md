@@ -259,6 +259,19 @@ on GitHub-hosted / container runners it is still being validated - use `audit` m
 there for now.** Every change to the enforcer goes through a dedicated
 network-security review.
 
+Egret records only the build: the command it wraps and the processes it
+starts, which stay in the build's cgroup. Work that another process does for
+the build runs outside that cgroup and is not in the report. This includes:
+- containers started through a container daemon (`docker build`,
+  `docker run`); the report says so when the build ran a container client;
+- in block mode, a login to the same machine (for example `ssh` to
+  `127.0.0.1`). Block mode hides the user's systemd session bus, so
+  `systemd-run --user` is not available to the build.
+
+In audit mode the build runs as root, so it can leave its cgroup. Audit mode
+reports what a well-behaved build does; it is not a boundary against a hostile
+one.
+
 ## Contributing
 
 Contributions go through a consistent review process, including a read-only

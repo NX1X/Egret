@@ -3,6 +3,63 @@
 Notable changes to Egret, following [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **Process and file monitoring record every event.** The exec and file
+  probes were attached through a perf event on CPU 0, and on newer kernels
+  (7.0, GitHub's current `ubuntu-latest`) they then ran only for tasks on
+  CPU 0. Most execs and file writes were lost, and nothing counted the loss;
+  the v0.4.0 self-test report shows "Processes: 0". Exec now uses the
+  `sched_process_exec` raw tracepoint (successful execs only, and the process
+  name is the new program), and file writes use a kprobe on `do_sys_openat2`,
+  which `open`, `creat`, `openat` and `openat2` all reach. Opens through
+  io_uring and `open_by_handle_at` do not reach it and are still not seen. CI
+  now checks that 30 of 30 execs and 30 of 30 writes are recorded, and that
+  `open`, `creat` and `openat2` called directly are recorded. If
+  `do_sys_openat2` cannot be probed, the report gets a `monitor` violation.
+- **Reports contain only the build** ([#10](https://github.com/NX1X/Egret/issues/10)).
+  The probes recorded every process on the host, so the Azure guest agent's
+  connections to `168.63.129.16` on GitHub-hosted runners showed up as raw-IP
+  egress, and `fail-on-violations` failed every job. The build now runs in its
+  own cgroup in audit mode too (block mode already did), and the probes record
+  only that cgroup. If Egret cannot create the cgroup, or the build cannot start
+  in it, it records the whole host as before and says so in a report note.
+  In audit mode the build runs as root and can leave the cgroup, so audit mode
+  is not a boundary against a hostile build.
+
+### Added
+
+- **Lost events are reported.** When a kernel ring buffer is full, or a session
+  holds more than 100,000 events of one kind or 10,000 violations, the report
+  gets a `monitor` violation with the counts. If the loss counter cannot be
+  read, the report says so too. Before, these losses were silent.
+- **No event is lost at the end of a run.** Egret now detaches its probes and
+  reads every event left in the kernel buffers before it writes the report.
+  Before, events from the last moments of the build could be discarded
+  without being counted.
+- **Scope self-check.** If the probes are scoped to the build but record no
+  exec at all, the report gets a `monitor` violation instead of looking clean.
+- **Coverage notes** (`notes` in `report.json`, a Notes section in the
+  Markdown). When the build runs a container client such as `docker`, a note
+  says that container traffic is not covered: the container daemon starts
+  those containers outside the build.
+
+### Security
+
+- **Block mode hides the build user's systemd session bus.** `/run/user/<uid>`
+  is covered by an empty mount in the build's private mount namespace, and
+  `DBUS_SESSION_BUS_ADDRESS` and `XDG_RUNTIME_DIR` are removed from the build's
+  environment. Before, `systemd-run --user` could start a process outside the
+  build cgroup, where neither the egress filter nor the probes apply.
+
+### Changed (upgrade impact)
+
+- **Containers started through Docker are no longer in the report.** Before,
+  their traffic was recorded together with every other process on the host.
+  It is now out of scope, and the report says so (see the note above).
+
 ## [0.4.0] - DNS correlation on hosted runners, honored block mode
 
 ### Changed (upgrade impact)

@@ -10,6 +10,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"golang.org/x/sys/unix"
 )
 
 // cgroupRoot is the cgroup-v2 unified mount.
@@ -97,8 +99,28 @@ func (c *buildCgroup) nftMatch() string {
 	return fmt.Sprintf(`socket cgroupv2 level %d "%s"`, c.level, c.relPath)
 }
 
-// fd is the directory fd for SysProcAttr.UseCgroupFD.
-func (c *buildCgroup) fd() int { return int(c.dir.Fd()) }
+// fd is the directory fd for SysProcAttr.UseCgroupFD, or -1 for no cgroup.
+func (c *buildCgroup) fd() int {
+	if c == nil {
+		return -1
+	}
+	return int(c.dir.Fd())
+}
+
+// id is the cgroup's id as the eBPF helper bpf_get_current_cgroup_id reports
+// it: the kernfs node id, which is the directory's inode number on 64-bit
+// kernels. 0 for no cgroup, or if it cannot be read (the probes then record
+// every task, and run_linux.go notes that in the report).
+func (c *buildCgroup) id() uint64 {
+	if c == nil {
+		return 0
+	}
+	var st unix.Stat_t
+	if err := unix.Fstat(int(c.dir.Fd()), &st); err != nil {
+		return 0
+	}
+	return st.Ino
+}
 
 // Kill SIGKILLs every process still in the cgroup, so anything the build forked
 // or daemonized that outlived the monitored command can't linger with a live

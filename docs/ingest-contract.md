@@ -42,7 +42,10 @@ Source of truth: `internal/ingest` in `Egret`. Wire format: JSON.
 - `run.*` fields are populated from the GitHub Actions environment
   (`GITHUB_REPOSITORY`, `GITHUB_SHA`, …); off CI they are empty.
 - `session` is exactly the `report.json` structure the agent already writes:
-  `connections`, `processes`, `file_writes`, `violations`, `mode`, timing, exit code.
+  `connections`, `processes`, `file_writes`, `violations`, `mode`, timing, exit code,
+  and (since v0.5.0) optional `notes`, a list of coverage notes. A violation's
+  `kind` is `connection`, `process`, `file`, or (since v0.5.0) `monitor`, which
+  flags a gap in what Egret observed, such as lost events.
 
 ## Compatibility policy
 

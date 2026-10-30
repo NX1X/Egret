@@ -4,8 +4,6 @@ package enforcer
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"fmt"
 	"net"
 	"os/exec"
@@ -51,32 +49,16 @@ type nftFirewall struct {
 	cg     *buildCgroup
 }
 
-func newFirewall(pol *policy.Policy) (firewall, error) {
+// newFirewall builds the block-mode filter for the run's build cgroup, which
+// the Enforcer owns. The filter matches only that cgroup's sockets.
+func newFirewall(pol *policy.Policy, runID string, cg *buildCgroup) (firewall, error) {
+	if cg == nil {
+		return nil, fmt.Errorf("block mode needs a build cgroup")
+	}
 	if _, err := exec.LookPath("nft"); err != nil {
 		return nil, fmt.Errorf("nft not found in PATH (install nftables): %w", err)
 	}
-	runID, err := newRunID()
-	if err != nil {
-		return nil, err
-	}
-	cg, err := newBuildCgroup(runID)
-	if err != nil {
-		return nil, err
-	}
 	return &nftFirewall{pol: pol, table: tableName(runID), cg: cg}, nil
-}
-
-// newRunID returns 16 random hex characters that name this run's nft table and
-// build cgroup. Not the pid: nft tables are per network namespace but pids are
-// per pid namespace, so two privileged host-network containers can both run
-// Egret as the same pid, and a shared table name would let one run delete the
-// other's live filter.
-func newRunID() (string, error) {
-	var b [8]byte
-	if _, err := rand.Read(b[:]); err != nil {
-		return "", fmt.Errorf("generating a run id: %w", err)
-	}
-	return hex.EncodeToString(b[:]), nil
 }
 
 // tableName is the per-run nft table. It shares the run id with the build
@@ -117,9 +99,6 @@ func dnsRules(dnsAddr string) ([]string, error) {
 		`oifname "lo" accept`,
 	}, nil
 }
-
-// BuildCgroupFD is the cgroup-v2 dir fd the monitored command joins.
-func (f *nftFirewall) BuildCgroupFD() int { return f.cg.fd() }
 
 // Setup installs the run's table: TTL-capable allow sets plus an output chain
 // that subjects ONLY the build cgroup to default-deny (accept established,
@@ -253,18 +232,17 @@ func (f *nftFirewall) ProbeDropCount(ctx context.Context) (uint64, error) {
 	return 0, fmt.Errorf("no packet count in: %s", strings.TrimSpace(string(out)))
 }
 
-// Teardown drops the whole egret table and removes the build cgroup. Idempotent.
+// Teardown drops the run's whole table. Idempotent.
 //
 // Order is fail-closed: kill anything still in the build cgroup BEFORE removing
 // the nft table, so a lingering/daemonized build process is never left alive with
 // the egress filter already gone (an unconfined window). Only then delete the
-// table (restoring the host) and remove the now-empty cgroup directory.
+// table (restoring the host). The Enforcer removes the empty cgroup afterwards.
 func (f *nftFirewall) Teardown() error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	// Kill the build cgroup BEFORE deleting the table (fail-closed order). Close()
-	// below calls Kill() again, but that second call is a no-op once cgroup.procs is
-	// empty - this explicit one is here only to precede the table delete.
+	// Kill the build cgroup BEFORE deleting the table (fail-closed order). The
+	// Enforcer removes the cgroup itself afterwards.
 	f.cg.Kill()
 	var firstErr error
 	if f.upDone {
@@ -274,20 +252,7 @@ func (f *nftFirewall) Teardown() error {
 			firstErr = err
 		}
 	}
-	if err := f.cg.Close(); err != nil && firstErr == nil {
-		firstErr = err
-	}
 	return firstErr
-}
-
-// KillBuild reaps the build cgroup without tearing down the egress rules, so it
-// can be called after the monitored command exits and before the report is
-// written. Teardown calls the same reaper again (idempotent once the cgroup is
-// empty).
-func (f *nftFirewall) KillBuild() {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.cg.Kill()
 }
 
 // runNft feeds a script to `nft -f -`.

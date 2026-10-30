@@ -128,6 +128,8 @@ jobs:
           sudo ./bin/egret run --mode audit --output-dir "${out}" -- \
             curl -fsS --connect-timeout 10 --max-time 30 https://example.com -o /dev/null
           sudo test -s "${out}/report.json" || { echo "::error::egret wrote no report.json"; exit 1; }
+          echo "processes:"; sudo jq -c '.processes[]? | {pid, ppid, comm, filename}' "${out}/report.json"
+          echo "violations:"; sudo jq -c '.violations' "${out}/report.json"
           if ! sudo jq -e '[.connections[]? | select(.comm == "curl" and .dport == 443)] | length >= 1' \
               "${out}/report.json" >/dev/null; then
             echo "::error::the eBPF network probe did not record the curl connection to port 443"
@@ -135,6 +137,78 @@ jobs:
             exit 1
           fi
           echo "eBPF probes loaded and recorded the curl connection."
+      # Every exec and every write must be recorded, whatever CPU it runs on.
+      # The probes used to be attached through perf events on CPU 0, and on
+      # newer kernels most execs and writes were silently lost.
+      - name: Smoke test - probes record every exec and write
+        timeout-minutes: 4
+        shell: bash
+        run: |
+          out="${RUNNER_TEMP}/egret-count"
+          fail=0
+          for pause in 0 0 1; do
+            sudo rm -rf "${out}"
+            sudo ./bin/egret run --mode audit --output-dir "${out}" -- \
+              bash -c "sleep ${pause}; for i in \$(seq 1 30); do /bin/true; done; for i in \$(seq 1 30); do echo x > /tmp/egret-count-\$i; done"
+            execs="$(sudo jq '[.processes[]? | select(.filename == "/bin/true")] | length' "${out}/report.json")"
+            writes="$(sudo jq '[.file_writes[]? | select(.path | startswith("/tmp/egret-count-"))] | length' "${out}/report.json")"
+            echo "pause ${pause}s: ${execs}/30 execs, ${writes}/30 writes; kernel $(uname -r)"
+            if [ "${execs}" -ne 30 ] || [ "${writes}" -ne 30 ]; then
+              echo "::error::the probes missed events (want 30/30 each)"; fail=1
+            fi
+          done
+          # open(2), creat(2) and openat2(2) called directly (shell redirection
+          # uses openat), so a partly inlined do_sys_openat2 cannot hide them.
+          sudo rm -rf "${out}"
+          sudo ./bin/egret run --mode audit --output-dir "${out}" -- python3 -c '
+          import ctypes, os, struct
+          libc = ctypes.CDLL(None, use_errno=True)
+          libc.syscall(2, b"/tmp/egret-sys-open", os.O_WRONLY | os.O_CREAT, 0o644)
+          libc.syscall(85, b"/tmp/egret-sys-creat", 0o644)
+          how = ctypes.create_string_buffer(struct.pack("QQQ", os.O_WRONLY | os.O_CREAT, 0o644, 0))
+          libc.syscall(437, -100, b"/tmp/egret-sys-openat2", how, 24)
+          '
+          for f in open creat openat2; do
+            if sudo jq -e --arg p "/tmp/egret-sys-${f}" '[.file_writes[]? | select(.path == $p)] | length == 1' "${out}/report.json" >/dev/null; then
+              echo "${f}(2): recorded"
+            else
+              echo "::error::${f}(2) write was not recorded"; fail=1
+            fi
+          done
+          exit "${fail}"
+      # Issue #10: the report must contain only the build. A loop OUTSIDE Egret
+      # (like the runner's own Azure guest agent) connects to 1.1.1.1 while
+      # Egret monitors a build that connects to example.com. The build also
+      # runs `docker version`, which must produce the container note.
+      - name: Smoke test - probes record only the build (issue 10)
+        timeout-minutes: 3
+        shell: bash
+        run: |
+          out="${RUNNER_TEMP}/egret-scope"
+          ( for _ in $(seq 1 40); do curl -s -o /dev/null --max-time 2 https://1.1.1.1 || true; sleep 0.25; done ) &
+          noise=$!
+          sudo ./bin/egret run --mode audit --output-dir "${out}" -- \
+            bash -c 'sleep 2; curl -fsS --max-time 20 -o /dev/null https://example.com; docker version >/dev/null 2>&1 || true; sleep 2'
+          wait "${noise}" || true
+          r="${out}/report.json"
+          sudo jq -c '[.connections[] | {comm, daddr, dport}]' "${r}"
+          echo "processes:"; sudo jq -c '.processes[]? | {pid, ppid, comm, filename}' "${r}"
+          echo "violations:"; sudo jq -c '.violations' "${r}"
+          fail=0
+          if sudo jq -e '[.connections[] | select(.daddr == "1.1.1.1")] | length > 0' "${r}" >/dev/null; then
+            echo "::error::the report includes the outside loop's connections to 1.1.1.1 (probes not scoped to the build)"; fail=1
+          fi
+          if ! sudo jq -e '[.connections[] | select(.comm == "curl" and .dport == 443)] | length >= 1' "${r}" >/dev/null; then
+            echo "::error::the build's own curl connection is missing"; fail=1
+          fi
+          if sudo jq -e '[.violations[] | select(.kind == "monitor")] | length > 0' "${r}" >/dev/null; then
+            echo "::error::monitor violation (lost events or empty scope)"; sudo jq -c '.violations' "${r}"; fail=1
+          fi
+          if ! sudo jq -e '[.notes[]? | select(test("container client"))] | length == 1' "${r}" >/dev/null; then
+            echo "::error::the container note is missing"; sudo jq -c '.notes, [.processes[]? | {comm, filename}]' "${r}"; fail=1
+          fi
+          [ "${fail}" -eq 0 ] && echo "Scope confirmed: only the build is recorded, and the container note is present."
+          exit "${fail}"
       - name: Verify module checksums
         run: go mod verify
       # govulncheck is NOT run here: it is a dedicated, required job in

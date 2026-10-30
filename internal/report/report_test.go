@@ -183,3 +183,14 @@ func TestCapSummary(t *testing.T) {
 		t.Errorf("the summary must be cut after a whole row, got tail %q", body[len(body)-30:])
 	}
 }
+
+func TestMarkdownRendersNotes(t *testing.T) {
+	s := &event.Session{Mode: "audit", Notes: []string{"The build used a container client."}}
+	md := Markdown(s)
+	if !strings.Contains(md, "## ℹ️ Notes") || !strings.Contains(md, "- The build used a container client.") {
+		t.Fatalf("notes section missing:\n%s", md)
+	}
+	if strings.Contains(Markdown(&event.Session{Mode: "audit"}), "Notes") {
+		t.Error("a session without notes must not render a Notes section")
+	}
+}

@@ -79,3 +79,19 @@ func TestIsSecretEnv(t *testing.T) {
 		}
 	}
 }
+
+func TestGuardedEnvironDropsSessionBus(t *testing.T) {
+	t.Setenv("DBUS_SESSION_BUS_ADDRESS", "unix:path=/run/user/1001/bus")
+	t.Setenv("XDG_RUNTIME_DIR", "/run/user/1001")
+	t.Setenv("EGRET_INGEST_TOKEN", "secret")
+	t.Setenv("KEEP_ME", "1")
+	got := strings.Join(guardedEnviron(), "\n")
+	for _, gone := range []string{"DBUS_SESSION_BUS_ADDRESS=", "XDG_RUNTIME_DIR=", "EGRET_INGEST_TOKEN="} {
+		if strings.Contains(got, gone) {
+			t.Errorf("guardedEnviron kept %s", gone)
+		}
+	}
+	if !strings.Contains(got, "KEEP_ME=1") {
+		t.Error("guardedEnviron dropped an ordinary variable")
+	}
+}
