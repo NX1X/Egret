@@ -70,7 +70,7 @@ type LinuxCollector struct {
 	closeOnce sync.Once
 
 	userLost atomic.Uint64 // records read from a ring but not decodable
-	notes    []string      // coverage notes from attach (see Notes)
+	gaps     []string      // coverage problems from attach (see Gaps)
 
 	closed       bool   // set by Close; the maps are gone after it
 	finalDropped uint64 // drop count read by Close before it unloads the maps
@@ -205,13 +205,13 @@ func (c *LinuxCollector) attach() error {
 			return fmt.Errorf("attaching the file probe: kprobe do_sys_openat2: %v; tracepoint sys_enter_openat: %w", err, terr)
 		}
 		c.links = append(c.links, l)
-		c.notes = append(c.notes, "File writes are watched through the openat syscall tracepoint, because do_sys_openat2 could not be probed on this kernel. On some kernels that tracepoint misses events, so file coverage may be incomplete.")
+		c.gaps = append(c.gaps, "do_sys_openat2 could not be probed, so file writes are watched through the openat syscall tracepoint, which misses open, creat and openat2 and, on newer kernels, most events; file coverage is incomplete")
 	}
 	return nil
 }
 
-// Notes are coverage facts about how the probes were attached, for the report.
-func (c *LinuxCollector) Notes() []string { return c.notes }
+// Gaps are coverage problems from attaching the probes, for the report.
+func (c *LinuxCollector) Gaps() []string { return c.gaps }
 
 func (c *LinuxCollector) startReaders(ctx context.Context) error {
 	netRd, err := ringbuf.NewReader(c.net.Events)

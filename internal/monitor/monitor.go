@@ -131,8 +131,9 @@ type Coverage struct {
 	KernelDropped uint64
 	// DropCountErr is set when the loss count could not be read in full.
 	DropCountErr error
-	// Notes from the collector (for example a probe fallback), added as-is.
-	Notes []string
+	// Gaps from the collector (for example a probe fallback); each becomes a
+	// monitor violation, so fail-on-violations trips on a blind spot.
+	Gaps []string
 }
 
 // Finish adds the coverage findings to the session returned by Wait:
@@ -176,9 +177,11 @@ func (m *Monitor) Finish(cov Coverage) *event.Session {
 			Detail: "the probes saw no exec from the build cgroup, so this report may miss the whole build",
 		})
 	}
-	s.Notes = append(s.Notes, cov.Notes...)
+	for _, g := range cov.Gaps {
+		s.Violations = append(s.Violations, event.Violation{Kind: event.KindMonitor, Reason: "probe coverage gap", Detail: g})
+	}
 	if !cov.Scoped {
-		s.Notes = append(s.Notes, "Not scoped to the build: Egret could not create a build cgroup, so this report includes every process on the host.")
+		s.Notes = append(s.Notes, "Not scoped to the build: Egret could not create a build cgroup or start the build in it, so this report includes every process on the host.")
 	}
 	if m.usedDocker {
 		s.Notes = append(s.Notes, "The build used a container client (for example docker). Containers are started by the container daemon, outside the build, so their traffic is not in this report.")
@@ -207,7 +210,9 @@ func (m *Monitor) drainProcs() {
 	for p := range m.coll.Processes() {
 		m.mu.Lock()
 		m.store(len(m.session.Processes), func() { m.session.Processes = append(m.session.Processes, p) })
-		if containerClients[path.Base(p.Filename)] {
+		// Match the process name too: an exec through a file descriptor
+		// (fexecve, execveat with AT_EMPTY_PATH) has a /dev/fd/N filename.
+		if containerClients[path.Base(p.Filename)] || containerClients[p.Comm] {
 			m.usedDocker = true
 		}
 		if v := m.pol.EvalProcess(p); v != nil {

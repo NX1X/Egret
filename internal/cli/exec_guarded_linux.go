@@ -153,7 +153,7 @@ func execGuarded(uid, gid int, resolvConf string, command []string) error {
 	// the user's systemd manager to start a process in the manager's own cgroup,
 	// outside the build cgroup, where neither the egress filter nor the probes
 	// see it. Needs CAP_SYS_ADMIN, so it runs before the capability drop.
-	if err := hideUserRuntimeDir(uid); err != nil {
+	if err := hideUserRuntimeDir(uid, gid); err != nil {
 		return fmt.Errorf("%s: hide the build user's session bus: %w", execGuardedCmdName, err)
 	}
 
@@ -216,10 +216,12 @@ func execGuarded(uid, gid int, resolvConf string, command []string) error {
 
 // hideUserRuntimeDir covers /run/user/<uid> with an empty tmpfs in the build's
 // private mount namespace (the host is unaffected). That directory holds the
-// user's session bus and systemd manager sockets. Abstract-namespace sockets
-// follow the network namespace, not the mount namespace, so they stay
-// reachable: a known residual.
-func hideUserRuntimeDir(uid int) error {
+// user's session bus and systemd manager sockets. The new one is owned by the
+// build user and writable, so tools that need a runtime dir (gpg-agent,
+// rootless podman) still work; only the host's sockets are gone.
+// Abstract-namespace sockets follow the network namespace, not the mount
+// namespace, so they stay reachable: a known residual.
+func hideUserRuntimeDir(uid, gid int) error {
 	dir := fmt.Sprintf("/run/user/%d", uid)
 	fi, err := os.Lstat(dir)
 	if errors.Is(err, os.ErrNotExist) {
@@ -231,7 +233,8 @@ func hideUserRuntimeDir(uid int) error {
 	if !fi.IsDir() {
 		return fmt.Errorf("%s is not a directory", dir)
 	}
-	return unix.Mount("tmpfs", dir, "tmpfs", unix.MS_NOSUID|unix.MS_NODEV|unix.MS_NOEXEC, "mode=0700,size=16k")
+	opts := fmt.Sprintf("mode=0700,uid=%d,gid=%d,size=8m", uid, gid)
+	return unix.Mount("tmpfs", dir, "tmpfs", unix.MS_NOSUID|unix.MS_NODEV|unix.MS_NOEXEC, opts)
 }
 
 // guardedEnviron is the block-mode build's environment: sanitizedEnviron

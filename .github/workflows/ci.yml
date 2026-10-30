@@ -157,6 +157,24 @@ jobs:
               echo "::error::the probes missed events (want 30/30 each)"; fail=1
             fi
           done
+          # open(2), creat(2) and openat2(2) called directly (shell redirection
+          # uses openat), so a partly inlined do_sys_openat2 cannot hide them.
+          sudo rm -rf "${out}"
+          sudo ./bin/egret run --mode audit --output-dir "${out}" -- python3 -c '
+          import ctypes, os, struct
+          libc = ctypes.CDLL(None, use_errno=True)
+          libc.syscall(2, b"/tmp/egret-sys-open", os.O_WRONLY | os.O_CREAT, 0o644)
+          libc.syscall(85, b"/tmp/egret-sys-creat", 0o644)
+          how = ctypes.create_string_buffer(struct.pack("QQQ", os.O_WRONLY | os.O_CREAT, 0o644, 0))
+          libc.syscall(437, -100, b"/tmp/egret-sys-openat2", how, 24)
+          '
+          for f in open creat openat2; do
+            if sudo jq -e --arg p "/tmp/egret-sys-${f}" '[.file_writes[]? | select(.path == $p)] | length == 1' "${out}/report.json" >/dev/null; then
+              echo "${f}(2): recorded"
+            else
+              echo "::error::${f}(2) write was not recorded"; fail=1
+            fi
+          done
           exit "${fail}"
       # Issue #10: the report must contain only the build. A loop OUTSIDE Egret
       # (like the runner's own Azure guest agent) connects to 1.1.1.1 while

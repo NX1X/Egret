@@ -117,11 +117,7 @@ func executeRun(cmd *cobra.Command, pol *policy.Policy, command []string, disabl
 
 	// Run the monitored command, wired to the parent's stdio. In block mode it is
 	// placed into the enforcer's cgroup so the egress filter scopes to the build.
-	unscope := func() {
-		if err := coll.SetScope(0); err != nil {
-			fmt.Fprintln(os.Stderr, "egret: warning: could not widen the probes to the whole host:", err)
-		}
-	}
+	unscope := func() error { return coll.SetScope(0) }
 	exitCode, inScope := runCommand(ctx, command, enf.ListenAddr(), resolvConf, enf.BuildCgroupFD(), pol.IsBlocking(), unscope)
 
 	// Reap anything the build left running (block mode: the whole build cgroup)
@@ -142,7 +138,7 @@ func executeRun(cmd *cobra.Command, pol *policy.Policy, command []string, disabl
 		Scoped:        enf.ScopeID() != 0 && inScope,
 		KernelDropped: dropped,
 		DropCountErr:  dropErr,
-		Notes:         coll.Notes(),
+		Gaps:          coll.Gaps(),
 	})
 	session.StartedAt = startedAt
 	session.FinishedAt = time.Now()
@@ -196,7 +192,9 @@ func executeRun(cmd *cobra.Command, pol *policy.Policy, command []string, disabl
 // whether the probes' scope matched it.
 // unscope is called before a fallback start outside the build cgroup, so the
 // probes widen to the whole host instead of recording nothing from the build.
-func runCommand(ctx context.Context, command []string, dnsAddr, resolvConf string, cgroupFD int, blocking bool, unscope func()) (int, bool) {
+// If it fails, the run still reports itself as scoped: the probes then see
+// nothing from the build, and the "scope recorded nothing" check flags it.
+func runCommand(ctx context.Context, command []string, dnsAddr, resolvConf string, cgroupFD int, blocking bool, unscope func() error) (int, bool) {
 	var c *exec.Cmd
 	if blocking {
 		// Block mode: the cgroup filter is only a real boundary if the build runs LESS
@@ -277,14 +275,18 @@ func runCommand(ctx context.Context, command []string, dnsAddr, resolvConf strin
 				continue
 			}
 			fmt.Fprintln(os.Stderr, "egret: warning:", try.warn+":", err)
+			widened := true
 			if try.fd < 0 && inScope {
-				unscope()
+				if uerr := unscope(); uerr != nil {
+					fmt.Fprintln(os.Stderr, "egret: warning: could not widen the probes to the whole host:", uerr)
+					widened = false
+				}
 			}
 			c = auditCommand(ctx, command, try.resolv, try.fd)
 			c.Stdin, c.Stdout, c.Stderr = os.Stdin, os.Stdout, os.Stderr
 			c.Env = append(sanitizedEnviron(), "EGRET_DNS="+dnsAddr)
 			if err = c.Start(); err == nil {
-				started, inScope = true, try.fd >= 0
+				started, inScope = true, try.fd >= 0 || !widened
 				break
 			}
 		}

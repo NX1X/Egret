@@ -130,3 +130,20 @@ func TestViolationCap(t *testing.T) {
 		t.Fatalf("want a 'violations not stored' violation counting 3, got %+v", capped)
 	}
 }
+
+func TestFinishTurnsProbeGapsIntoViolations(t *testing.T) {
+	s := runMonitor(t, []event.Process{{PID: 1, Filename: "/bin/sh"}}, nil,
+		Coverage{Scoped: true, Gaps: []string{"file probe fell back"}})
+	v := monitorViolations(s)
+	if len(v) != 1 || v[0].Reason != "probe coverage gap" || v[0].Detail != "file probe fell back" {
+		t.Fatalf("want one 'probe coverage gap' violation, got %+v", v)
+	}
+}
+
+func TestContainerNoteMatchesProcessName(t *testing.T) {
+	// fexecve: the filename is a /dev/fd path, the process name is real.
+	s := runMonitor(t, []event.Process{{PID: 1, Filename: "/dev/fd/3", Comm: "docker"}}, nil, Coverage{Scoped: true})
+	if len(s.Notes) != 1 || !strings.Contains(s.Notes[0], "container client") {
+		t.Errorf("want the container note for comm=docker, got %q", s.Notes)
+	}
+}
