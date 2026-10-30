@@ -137,6 +137,18 @@ jobs:
             exit 1
           fi
           echo "eBPF probes loaded and recorded the curl connection."
+      # TEMPORARY diagnostic: how many execs and writes do the probes record?
+      - name: Diagnostic - exec and file event counts
+        timeout-minutes: 3
+        shell: bash
+        run: |
+          out="${RUNNER_TEMP}/egret-diag"
+          sudo ./bin/egret run --mode audit --output-dir "${out}" -- \
+            bash -c 'for i in $(seq 1 30); do /bin/true; done; for i in $(seq 1 30); do echo x > /tmp/egret-diag-$i; done; /usr/bin/env true'
+          sudo jq -c '{procs: (.processes|length), writes: (.file_writes|length), violations}' "${out}/report.json"
+          sudo jq -c '.processes[]? | {pid, ppid, comm, filename}' "${out}/report.json" | head -40
+          echo "--- unscoped probe check: same loop outside Egret while Egret watches 'sleep 3'"
+          uname -r; cat /proc/sys/kernel/perf_event_paranoid
       # Issue #10: the report must contain only the build. A loop OUTSIDE Egret
       # (like the runner's own Azure guest agent) connects to 1.1.1.1 while
       # Egret monitors a build that connects to example.com. The build also
