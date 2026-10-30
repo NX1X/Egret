@@ -28,7 +28,10 @@ type Collector interface {
 	FileWrites() <-chan event.FileWrite
 	// Dropped is the number of events the kernel side lost because a ring
 	// buffer was full. Read it after the build has finished.
-	Dropped() uint64
+	// The error is non-nil when the count may be incomplete.
+	Dropped() (uint64, error)
+	// SetScope sets which cgroup the probes record (0 = every task).
+	SetScope(cgroupID uint64) error
 	// Close detaches all probes and releases kernel resources. Safe to call
 	// once; idempotency is the implementation's responsibility.
 	Close() error

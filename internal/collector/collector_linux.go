@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/NX1X/Egret/internal/event"
@@ -63,12 +64,16 @@ type LinuxCollector struct {
 	procs  chan event.Process
 	writes chan event.FileWrite
 
-	done      chan struct{} // closed by Close to unblock the ctx watcher
-	wg        sync.WaitGroup
+	done      chan struct{}  // closed by Close to stop the ctx watcher
+	readersWG sync.WaitGroup // the three ring readers
+	watchWG   sync.WaitGroup // the ctx watcher
 	closeOnce sync.Once
+
+	userLost atomic.Uint64 // records read from a ring but not decodable
 
 	closed       bool   // set by Close; the maps are gone after it
 	finalDropped uint64 // drop count read by Close before it unloads the maps
+	finalErr     error  // why the kernel drop count could not be read
 }
 
 // New loads the eBPF objects, attaches every probe, and starts the reader
@@ -117,6 +122,10 @@ func New(ctx context.Context, scopeCgroup uint64) (Collector, error) {
 	return c, nil
 }
 
+// SetScope changes the probes' scope while they run. 0 widens them to the
+// whole host (used when the build had to start outside its cgroup).
+func (c *LinuxCollector) SetScope(id uint64) error { return c.setScope(id) }
+
 // setScope writes the build's cgroup id into every probe's scope map.
 func (c *LinuxCollector) setScope(id uint64) error {
 	for name, m := range c.scopeMaps() {
@@ -131,26 +140,33 @@ func (c *LinuxCollector) scopeMaps() map[string]*ebpf.Map {
 	return map[string]*ebpf.Map{"network": c.net.ScopeCgroup, "process": c.proc.ScopeCgroup, "file": c.file.ScopeCgroup}
 }
 
-// Dropped sums the per-CPU drop counters of every probe. A read error counts
-// as 0 for that probe; the counters are informational, never a gate.
-func (c *LinuxCollector) Dropped() uint64 {
+// Dropped returns how many events were lost: the per-CPU drop counters of
+// every probe (full rings) plus records userspace could not decode. The error
+// is non-nil when a kernel counter could not be read, so the count may be low;
+// the caller must report that instead of treating it as "nothing lost".
+func (c *LinuxCollector) Dropped() (uint64, error) {
 	if c.closed {
-		return c.finalDropped
+		return c.finalDropped, c.finalErr
 	}
-	var total uint64
-	for _, m := range []*ebpf.Map{c.net.Dropped, c.proc.Dropped, c.file.Dropped} {
+	total := c.userLost.Load()
+	var firstErr error
+	for name, m := range map[string]*ebpf.Map{"network": c.net.Dropped, "process": c.proc.Dropped, "file": c.file.Dropped} {
+		var perCPU []uint64
 		if m == nil {
+			firstErr = fmt.Errorf("the %s drop counter is not loaded", name)
 			continue
 		}
-		var perCPU []uint64
 		if err := m.Lookup(uint32(0), &perCPU); err != nil {
+			if firstErr == nil {
+				firstErr = fmt.Errorf("reading the %s drop counter: %w", name, err)
+			}
 			continue
 		}
 		for _, n := range perCPU {
 			total += n
 		}
 	}
-	return total
+	return total, firstErr
 }
 
 func (c *LinuxCollector) attach() error {
@@ -206,9 +222,9 @@ func (c *LinuxCollector) startReaders(ctx context.Context) error {
 	// Cancellation: when ctx is done (or Close was called), close the readers,
 	// which unblocks the Read loops below. Selecting on c.done as well means
 	// Close() never deadlocks waiting on a context that was never cancelled.
-	c.wg.Add(1)
+	c.watchWG.Add(1)
 	go func() {
-		defer c.wg.Done()
+		defer c.watchWG.Done()
 		select {
 		case <-ctx.Done():
 		case <-c.done:
@@ -218,7 +234,7 @@ func (c *LinuxCollector) startReaders(ctx context.Context) error {
 		}
 	}()
 
-	c.wg.Add(3)
+	c.readersWG.Add(3)
 	go c.readConns(netRd)
 	go c.readProcs(procRd)
 	go c.readFiles(fileRd)
@@ -226,18 +242,19 @@ func (c *LinuxCollector) startReaders(ctx context.Context) error {
 }
 
 func (c *LinuxCollector) readConns(r *ringbuf.Reader) {
-	defer c.wg.Done()
+	defer c.readersWG.Done()
 	defer close(c.conns)
 	for {
 		rec, err := r.Read()
 		if err != nil {
-			if errors.Is(err, ringbuf.ErrClosed) {
+			if ringDone(err) {
 				return
 			}
 			continue
 		}
 		var raw connEventRaw
 		if err := binary.Read(bytes.NewReader(rec.RawSample), binary.LittleEndian, &raw); err != nil {
+			c.userLost.Add(1)
 			continue
 		}
 		c.conns <- event.Connection{
@@ -252,18 +269,19 @@ func (c *LinuxCollector) readConns(r *ringbuf.Reader) {
 }
 
 func (c *LinuxCollector) readProcs(r *ringbuf.Reader) {
-	defer c.wg.Done()
+	defer c.readersWG.Done()
 	defer close(c.procs)
 	for {
 		rec, err := r.Read()
 		if err != nil {
-			if errors.Is(err, ringbuf.ErrClosed) {
+			if ringDone(err) {
 				return
 			}
 			continue
 		}
 		var raw procEventRaw
 		if err := binary.Read(bytes.NewReader(rec.RawSample), binary.LittleEndian, &raw); err != nil {
+			c.userLost.Add(1)
 			continue
 		}
 		c.procs <- event.Process{
@@ -277,18 +295,19 @@ func (c *LinuxCollector) readProcs(r *ringbuf.Reader) {
 }
 
 func (c *LinuxCollector) readFiles(r *ringbuf.Reader) {
-	defer c.wg.Done()
+	defer c.readersWG.Done()
 	defer close(c.writes)
 	for {
 		rec, err := r.Read()
 		if err != nil {
-			if errors.Is(err, ringbuf.ErrClosed) {
+			if ringDone(err) {
 				return
 			}
 			continue
 		}
 		var raw fileEventRaw
 		if err := binary.Read(bytes.NewReader(rec.RawSample), binary.LittleEndian, &raw); err != nil {
+			c.userLost.Add(1)
 			continue
 		}
 		c.writes <- event.FileWrite{
@@ -305,16 +324,36 @@ func (c *LinuxCollector) Connections() <-chan event.Connection { return c.conns 
 func (c *LinuxCollector) Processes() <-chan event.Process      { return c.procs }
 func (c *LinuxCollector) FileWrites() <-chan event.FileWrite   { return c.writes }
 
-// Close detaches probes and unloads objects. The reader goroutines exit when
-// their readers close (driven by ctx cancellation or here).
+// ringDone reports whether a ring Read error means "no more records": the
+// reader was flushed (Close drained it) or closed (ctx cancelled).
+func ringDone(err error) bool {
+	return errors.Is(err, ringbuf.ErrFlushed) || errors.Is(err, ringbuf.ErrClosed)
+}
+
+// Close detaches the probes, drains every ring, then unloads the objects.
+//
+// Order matters. Detaching first means no new event arrives. Flush then makes
+// each reader return every record still in its ring before it stops, so an
+// event the build produced just before it exited is never lost. (Closing the
+// readers straight away discarded those records, and because the ring was not
+// full, the drop counter did not count them.) On ctx cancellation the watcher
+// closes the readers instead, which is the abort path.
 func (c *LinuxCollector) Close() error {
 	c.closeOnce.Do(func() {
-		close(c.done) // unblock the ctx watcher if ctx was never cancelled
+		for _, l := range c.links {
+			_ = l.Close()
+		}
+		c.links = nil
+		for _, r := range c.readers {
+			_ = r.Flush()
+		}
+		c.readersWG.Wait()
+		close(c.done)
+		c.watchWG.Wait()
 		for _, r := range c.readers {
 			_ = r.Close()
 		}
-		c.wg.Wait()
-		c.finalDropped = c.Dropped()
+		c.finalDropped, c.finalErr = c.Dropped()
 		c.closed = true
 		c.closeKernel()
 	})

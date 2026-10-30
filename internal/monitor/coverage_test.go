@@ -1,6 +1,7 @@
 package monitor
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -88,5 +89,44 @@ func TestStorageCapCountsOverflow(t *testing.T) {
 	v := monitorViolations(s)
 	if len(v) != 1 || !strings.Contains(v[0].Detail, "5 over the") {
 		t.Fatalf("want an 'events lost' violation counting 5 over the cap, got %+v", v)
+	}
+}
+
+func TestFinishReportsUnreadableDropCounter(t *testing.T) {
+	s := runMonitor(t, []event.Process{{PID: 1, Filename: "/bin/sh"}}, nil,
+		Coverage{Scoped: true, DropCountErr: errors.New("map lookup failed")})
+	v := monitorViolations(s)
+	if len(v) != 1 || v[0].Reason != "event loss unknown" {
+		t.Fatalf("want an 'event loss unknown' violation, got %+v", v)
+	}
+}
+
+func TestViolationCap(t *testing.T) {
+	// Every write to a protected path is a violation under the default policy.
+	writes := make([]event.FileWrite, maxViolations+3)
+	for i := range writes {
+		writes[i] = event.FileWrite{PID: 1, Path: "/etc/passwd"}
+	}
+	pol := policy.Default()
+	pol.File.ProtectedPaths = []string{"/etc/"}
+	m := New(newFakeCollector(nil, []event.Process{{PID: 1, Filename: "/bin/sh"}}, writes), pol, nil)
+	m.Start()
+	m.Wait()
+	s := m.Finish(Coverage{Scoped: true})
+	var capped *event.Violation
+	n := 0
+	for i, v := range s.Violations {
+		if v.Kind == event.KindFile {
+			n++
+		}
+		if v.Reason == "violations not stored" {
+			capped = &s.Violations[i]
+		}
+	}
+	if n != maxViolations {
+		t.Errorf("stored %d file violations, want the cap %d", n, maxViolations)
+	}
+	if capped == nil || !strings.Contains(capped.Detail, "3 more violation") {
+		t.Fatalf("want a 'violations not stored' violation counting 3, got %+v", capped)
 	}
 }

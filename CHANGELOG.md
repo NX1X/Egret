@@ -12,21 +12,35 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   connections to `168.63.129.16` on GitHub-hosted runners showed up as raw-IP
   egress, and `fail-on-violations` failed every job. The build now runs in its
   own cgroup in audit mode too (block mode already did), and the probes record
-  only that cgroup. If Egret cannot create the cgroup, it records the whole host
-  as before and says so in a report note.
+  only that cgroup. If Egret cannot create the cgroup, or the build cannot start
+  in it, it records the whole host as before and says so in a report note.
+  In audit mode the build runs as root and can leave the cgroup, so audit mode
+  is not a boundary against a hostile build.
 
 ### Added
 
 - **Lost events are reported.** When a kernel ring buffer is full, or a session
-  holds more than 100,000 events of one kind, the report gets a `monitor`
-  violation that says how many events were lost. Before, they were lost
-  silently.
+  holds more than 100,000 events of one kind or 10,000 violations, the report
+  gets a `monitor` violation with the counts. If the loss counter cannot be
+  read, the report says so too. Before, these losses were silent.
+- **No event is lost at the end of a run.** Egret now detaches its probes and
+  reads every event left in the kernel buffers before it writes the report.
+  Before, events from the last moments of the build could be discarded
+  without being counted.
 - **Scope self-check.** If the probes are scoped to the build but record no
   exec at all, the report gets a `monitor` violation instead of looking clean.
 - **Coverage notes** (`notes` in `report.json`, a Notes section in the
   Markdown). When the build runs a container client such as `docker`, a note
   says that container traffic is not covered: the container daemon starts
   those containers outside the build.
+
+### Security
+
+- **Block mode hides the build user's systemd session bus.** `/run/user/<uid>`
+  is covered by an empty mount in the build's private mount namespace, and
+  `DBUS_SESSION_BUS_ADDRESS` and `XDG_RUNTIME_DIR` are removed from the build's
+  environment. Before, `systemd-run --user` could start a process outside the
+  build cgroup, where neither the egress filter nor the probes apply.
 
 ### Changed (upgrade impact)
 

@@ -48,15 +48,20 @@ type Monitor struct {
 	session *event.Session
 	wg      sync.WaitGroup
 
-	overflow   uint64 // events not stored because a kind hit maxEventsPerKind
-	usedDocker bool   // the build ran a container client (see containerClients)
+	overflow          uint64 // events not stored because a kind hit maxEventsPerKind
+	violationOverflow uint64 // violations not stored because of maxViolations
+	usedDocker        bool   // the build ran a container client (see containerClients)
 }
 
 // maxEventsPerKind caps how many connections, processes and file writes one
-// session stores, so a build that opens files in a tight loop cannot exhaust
-// Egret's memory. Policy evaluation still runs on every event; only storage
-// stops, and the overflow is reported as a monitor violation.
-const maxEventsPerKind = 100_000
+// session stores, and maxViolations caps the stored violations, so a build that
+// opens files or connects in a tight loop cannot grow Egret's memory without
+// bound. Policy evaluation still runs on every event; only storage stops, and
+// each overflow is reported as a monitor violation.
+const (
+	maxEventsPerKind = 100_000
+	maxViolations    = 10_000
+)
 
 // containerClients are programs that ask a container daemon to run work. The
 // daemon, not the build, starts those containers, so they run outside the
@@ -107,6 +112,16 @@ func (m *Monitor) store(n int, add func()) {
 	add()
 }
 
+// addViolation stores v unless maxViolations are already stored. The caller
+// holds m.mu.
+func (m *Monitor) addViolation(v event.Violation) {
+	if len(m.session.Violations) >= maxViolations {
+		m.violationOverflow++
+		return
+	}
+	m.session.Violations = append(m.session.Violations, v)
+}
+
 // Coverage describes how much of the build the probes could see. Fill it after
 // the collector is closed.
 type Coverage struct {
@@ -114,6 +129,8 @@ type Coverage struct {
 	Scoped bool
 	// KernelDropped is the number of events lost in full ring buffers.
 	KernelDropped uint64
+	// DropCountErr is set when the loss count could not be read in full.
+	DropCountErr error
 }
 
 // Finish adds the coverage findings to the session returned by Wait:
@@ -134,6 +151,20 @@ func (m *Monitor) Finish(cov Coverage) *event.Session {
 			Reason: "events lost",
 			Detail: fmt.Sprintf("%d event(s) were not recorded (%d lost in full kernel buffers, %d over the %d-per-kind storage cap); this report is incomplete",
 				lost, cov.KernelDropped, m.overflow, maxEventsPerKind),
+		})
+	}
+	if cov.DropCountErr != nil {
+		s.Violations = append(s.Violations, event.Violation{
+			Kind:   event.KindMonitor,
+			Reason: "event loss unknown",
+			Detail: "Egret could not read its lost-event counter (" + cov.DropCountErr.Error() + "), so this report may be incomplete without saying so",
+		})
+	}
+	if m.violationOverflow > 0 {
+		s.Violations = append(s.Violations, event.Violation{
+			Kind:   event.KindMonitor,
+			Reason: "violations not stored",
+			Detail: fmt.Sprintf("%d more violation(s) were found but not stored (cap %d); this report lists only the first ones", m.violationOverflow, maxViolations),
 		})
 	}
 	if cov.Scoped && len(s.Processes) == 0 {
@@ -162,7 +193,7 @@ func (m *Monitor) drainConns() {
 		m.store(len(m.session.Connections), func() { m.session.Connections = append(m.session.Connections, c) })
 		if v := m.pol.EvalConnection(c); v != nil {
 			v.Blocked = m.pol.IsBlocking()
-			m.session.Violations = append(m.session.Violations, *v)
+			m.addViolation(*v)
 		}
 		m.mu.Unlock()
 	}
@@ -177,7 +208,7 @@ func (m *Monitor) drainProcs() {
 			m.usedDocker = true
 		}
 		if v := m.pol.EvalProcess(p); v != nil {
-			m.session.Violations = append(m.session.Violations, *v)
+			m.addViolation(*v)
 		}
 		m.mu.Unlock()
 	}
@@ -189,7 +220,7 @@ func (m *Monitor) drainFiles() {
 		m.mu.Lock()
 		m.store(len(m.session.FileWrites), func() { m.session.FileWrites = append(m.session.FileWrites, w) })
 		if v := m.pol.EvalFile(w); v != nil {
-			m.session.Violations = append(m.session.Violations, *v)
+			m.addViolation(*v)
 		}
 		m.mu.Unlock()
 	}
