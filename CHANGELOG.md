@@ -3,7 +3,7 @@
 Notable changes to Egret, following [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.5.0] - Reports that show the whole build and only the build
 
 ### Fixed
 
@@ -51,6 +51,8 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Security
 
+- **Built with Go 1.26.10.** It fixes GO-2026-6809 (CVE-2026-111943): Go's
+  `crypto/x509` did not distrust some compromised intermediate certificates.
 - **Block mode hides the build user's systemd session bus.** `/run/user/<uid>`
   is covered by an empty mount in the build's private mount namespace, and
   `DBUS_SESSION_BUS_ADDRESS` and `XDG_RUNTIME_DIR` are removed from the build's
@@ -439,6 +441,7 @@ generation - shipped as a CLI and a GitHub Action, with no server and no phone-h
 - **Hardened by default:** no phone-home; egress/event records are metadata only
   (never payloads); block mode is fail-closed on teardown.
 
+[0.5.0]: https://github.com/NX1X/Egret/releases/tag/v0.5.0
 [0.4.0]: https://github.com/NX1X/Egret/releases/tag/v0.4.0
 [0.3.0]: https://github.com/NX1X/Egret/releases/tag/v0.3.0
 [0.2.0]: https://github.com/NX1X/Egret/releases/tag/v0.2.0
