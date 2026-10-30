@@ -128,7 +128,8 @@ jobs:
           sudo ./bin/egret run --mode audit --output-dir "${out}" -- \
             curl -fsS --connect-timeout 10 --max-time 30 https://example.com -o /dev/null
           sudo test -s "${out}/report.json" || { echo "::error::egret wrote no report.json"; exit 1; }
-          echo "processes:"; sudo jq -c '.processes[] | {pid, ppid, comm, filename}' "${out}/report.json"
+          echo "processes:"; sudo jq -c '.processes[]? | {pid, ppid, comm, filename}' "${out}/report.json"
+          echo "violations:"; sudo jq -c '.violations' "${out}/report.json"
           if ! sudo jq -e '[.connections[]? | select(.comm == "curl" and .dport == 443)] | length >= 1' \
               "${out}/report.json" >/dev/null; then
             echo "::error::the eBPF network probe did not record the curl connection to port 443"
@@ -152,7 +153,7 @@ jobs:
           wait "${noise}" || true
           r="${out}/report.json"
           sudo jq -c '[.connections[] | {comm, daddr, dport}]' "${r}"
-          echo "processes:"; sudo jq -c '.processes[] | {pid, ppid, comm, filename}' "${r}"
+          echo "processes:"; sudo jq -c '.processes[]? | {pid, ppid, comm, filename}' "${r}"
           echo "violations:"; sudo jq -c '.violations' "${r}"
           fail=0
           if sudo jq -e '[.connections[] | select(.daddr == "1.1.1.1")] | length > 0' "${r}" >/dev/null; then
@@ -165,7 +166,7 @@ jobs:
             echo "::error::monitor violation (lost events or empty scope)"; sudo jq -c '.violations' "${r}"; fail=1
           fi
           if ! sudo jq -e '[.notes[]? | select(test("container client"))] | length == 1' "${r}" >/dev/null; then
-            echo "::error::the container note is missing"; sudo jq -c '.notes, [.processes[] | {comm, filename}]' "${r}"; fail=1
+            echo "::error::the container note is missing"; sudo jq -c '.notes, [.processes[]? | {comm, filename}]' "${r}"; fail=1
           fi
           [ "${fail}" -eq 0 ] && echo "Scope confirmed: only the build is recorded, and the container note is present."
           exit "${fail}"
