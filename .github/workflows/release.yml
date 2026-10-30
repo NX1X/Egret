@@ -32,7 +32,7 @@ jobs:
     # known, reproducible OS rather than a moving `ubuntu-latest`. Bump this
     # deliberately when GitHub deprecates the image (SLSA provenance also records
     # the exact runner). CI/test jobs keep `ubuntu-latest` for auto-patching.
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     # ~1.5m observed. Kept generous (not trimmed to the observed time like the CI
     # jobs) because this job is rare, publishes the trust artifact, and would leave
     # a half-published release behind if it were killed between `gh release create`
