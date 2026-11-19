@@ -1,151 +1,159 @@
 {
-  // ═══════════════════════════════════════════════════════════════════════════
-  //  RENOVATE CONFIG - Egret (Go modules + GitHub Actions)
-  //  Renovate reads this from .github/renovate.json5 automatically.
-  //
-  //  SELF-CONTAINED: the dependency policy is inlined here rather than fetched
-  //  from a shared preset repo, so Renovate has no external preset dependency.
-  //
-  //  Posture: MANUAL MERGE - nothing automerges; every update lands as a PR.
-  //  14-day supply-chain cooldown, OSV + OpenSSF alerts, SHA-pinned
-  //  actions, dependency dashboard.
-  // ═══════════════════════════════════════════════════════════════════════════
-
-  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-
-  // Public Renovate presets only - these always resolve.
-  //   config:best-practices  → pin Action SHAs + dev deps, npm release-age cooldown
-  //   security:openssf-scorecard → OpenSSF Scorecard badge on every PR
-  "extends": [
-    "config:best-practices",
-    "security:openssf-scorecard",
-    ":dependencyDashboard",
-    ":semanticCommits"
+  $schema: 'https://docs.renovatebot.com/renovate-schema.json',
+  extends: [
+    'config:best-practices',
+    'security:openssf-scorecard',
+    ':dependencyDashboard',
+    ':semanticCommits',
   ],
-
-  "timezone": "America/New_York",
-  "schedule": ["before 6am"],
-
-  // ── Supply-chain cooldown: default 14 days before adopting a new release
-  //    (stricter than a 7-day minimum). CVE fixes are exempted via vulnerabilityAlerts below.
-  "minimumReleaseAge": "14 days",
-  "internalChecksFilter": "strict",
-
-  "configMigration": true,
-
-  "labels": ["dependencies"],
-  "assignees": ["NX1X"],
-  "reviewers": ["NX1X"],
-
-  "dependencyDashboard": true,
-  "dependencyDashboardTitle": "Dependency Dashboard",
-  "dependencyDashboardLabels": ["dependencies"],
-  "dependencyDashboardAutoclose": true,
-
-  "prConcurrentLimit": 5,
-  "prHourlyLimit": 2,
-  // Open the PR as soon as the branch is created. "not-pending" holds the PR
-  // until the branch's status checks are non-pending, but this repo's CI only
-  // runs on pushes to main and on pull_request events - it never runs on a
-  // renovate/* branch - so "not-pending" left every update stuck with branches
-  // created but no PR ever opened. With "immediate", checks run on the PR (where
-  // they're reviewed) and the 14-day cooldown is still enforced by
-  // minimumReleaseAge + internalChecksFilter: strict.
-  "prCreation": "immediate",
-  "rangeStrategy": "bump",
-  "separateMultipleMajor": true,
-
-  // ── Security fast-path: CVE fixes bypass the cooldown but still need a manual
-  //    merge (active CVE: exception by manual approval).
-  "vulnerabilityAlerts": {
-    "enabled": true,
-    "minimumReleaseAge": "0 days",
-    "labels": ["dependencies", "security"]
+  timezone: 'America/New_York',
+  schedule: [
+    'before 6am',
+  ],
+  minimumReleaseAge: '14 days',
+  internalChecksFilter: 'strict',
+  configMigration: true,
+  labels: [
+    'dependencies',
+  ],
+  assignees: [
+    'NX1X',
+  ],
+  reviewers: [
+    'NX1X',
+  ],
+  dependencyDashboard: {
+    enabled: true,
+    title: 'Dependency Dashboard',
+    labels: [
+      'dependencies',
+    ],
+    autoclose: true,
   },
-  "osvVulnerabilityAlerts": true,
-
-  "lockFileMaintenance": {
-    "enabled": true,
-    "schedule": ["before 6am on monday"]
+  prConcurrentLimit: 5,
+  prHourlyLimit: 2,
+  prCreation: 'immediate',
+  rangeStrategy: 'bump',
+  separateMultipleMajor: true,
+  vulnerabilityAlerts: {
+    enabled: true,
+    minimumReleaseAge: '0 days',
+    labels: [
+      'dependencies',
+      'security',
+    ],
   },
-
-  "packageRules": [
+  osvVulnerabilityAlerts: true,
+  lockFileMaintenance: {
+    enabled: true,
+    schedule: [
+      'before 6am on monday',
+    ],
+  },
+  packageRules: [
     {
-      "description": "GitHub Actions: SHA-pinned, grouped minor/patch/digest into one PR",
-      "matchManagers": ["github-actions"],
-      "matchUpdateTypes": ["minor", "patch", "digest"],
-      "groupName": "github-actions",
-      "labels": ["dependencies", "github-actions"]
+      description: 'GitHub Actions: SHA-pinned, grouped minor/patch/digest into one PR',
+      matchManagers: [
+        'github-actions',
+      ],
+      matchUpdateTypes: [
+        'minor',
+        'patch',
+        'digest',
+      ],
+      groupName: 'github-actions',
+      labels: [
+        'dependencies',
+        'github-actions',
+      ],
     },
     {
-      "description": "GitHub Actions majors: dedicated label, reviewed individually",
-      "matchManagers": ["github-actions"],
-      "matchUpdateTypes": ["major"],
-      "labels": ["dependencies", "github-actions", "major-update"]
+      description: 'GitHub Actions majors: dedicated label, reviewed individually',
+      matchManagers: [
+        'github-actions',
+      ],
+      matchUpdateTypes: [
+        'major',
+      ],
+      labels: [
+        'dependencies',
+        'github-actions',
+        'major-update',
+      ],
     },
     {
-      "description": "Any major update: extra cooldown + clear label so it never slips by",
-      "matchUpdateTypes": ["major"],
-      "minimumReleaseAge": "21 days",
-      "labels": ["dependencies", "major-update"]
+      description: 'Any major update: extra cooldown + clear label so it never slips by',
+      matchUpdateTypes: [
+        'major',
+      ],
+      minimumReleaseAge: '21 days',
+      labels: [
+        'dependencies',
+        'major-update',
+      ],
     },
     {
-      "description": "Go modules: group minor/patch into one review PR; majors stay separate",
-      "matchManagers": ["gomod"],
-      "matchUpdateTypes": ["minor", "patch"],
-      "groupName": "go modules",
-      "labels": ["dependencies", "go"]
+      description: 'Go modules: group minor/patch into one review PR; majors stay separate',
+      matchManagers: [
+        'gomod',
+      ],
+      matchUpdateTypes: [
+        'minor',
+        'patch',
+      ],
+      groupName: 'go modules',
+      labels: [
+        'dependencies',
+        'go',
+      ],
     },
     {
-      // MUST stay the last rule: later rules override groupName from earlier ones.
-      // The Go toolchain lives in several places (the go.mod go directive, every
-      // setup-go `go-version`, the golang container images). Without this rule they
-      // landed in DIFFERENT groups ("go modules", "github-actions"), so each PR
-      // alone was inconsistent and failed CI, and one of them pinned Go 1.27.1,
-      // which is still vulnerable to GO-2026-6617. One group moves them together.
-      "description": "Go toolchain: go directive, setup-go go-version and golang images in ONE PR",
-      "matchDepNames": ["go", "golang"],
-      // Go 1.27.0 to 1.27.2 are vulnerable (GO-2026-6617, GO-2026-6809; govulncheck
-      // fails). Skip them; the first 1.27 release Renovate may propose is 1.27.3.
-      "allowedVersions": "!/^1\\.27\\.[012](-|$)/",
-      "groupName": "go toolchain",
-      "labels": ["dependencies", "go", "toolchain"]
-    }
+      description: 'Go toolchain: go directive, setup-go go-version and golang images in ONE PR',
+      matchDepNames: [
+        'go',
+        'golang',
+      ],
+      allowedVersions: '!/^1\\.27\\.[012](-|$)/',
+      groupName: 'go toolchain',
+      labels: [
+        'dependencies',
+        'go',
+        'toolchain',
+      ],
+    },
   ],
-
-  // ── Tool versions pinned inside workflow `run:` steps rather than in a
-  //    manifest. The github-actions manager only reads `uses:`, so without these
-  //    the pins rot silently and never get a security bump.
-  "customManagers": [
+  customManagers: [
     {
-      "customType": "regex",
-      "description": "govulncheck pinned in a workflow run step",
-      "managerFilePatterns": ["/^\\.github/workflows/.+\\.ya?ml$/"],
-      // Only the env-var form exists today (`go install "...@${GOVULNCHECK_VERSION}"`).
-      // Verified to match: adding a second, inline `govulncheck@vX.Y.Z` pattern
-      // looked defensive but matched nothing, which is exactly the silent-rot
-      // failure these managers exist to prevent.
-      "matchStrings": ["GOVULNCHECK_VERSION:\\s*(?<currentValue>v[0-9][^\\s\"']*)"],
-      "depNameTemplate": "golang.org/x/vuln",
-      "datasourceTemplate": "go"
+      customType: 'regex',
+      description: 'govulncheck pinned in a workflow run step',
+      managerFilePatterns: [
+        '/^\\.github/workflows/.+\\.ya?ml$/',
+      ],
+      matchStrings: [
+        'GOVULNCHECK_VERSION:\\s*(?<currentValue>v[0-9][^\\s"\']*)',
+      ],
+      depNameTemplate: 'golang.org/x/vuln',
+      datasourceTemplate: 'go',
     },
     {
-      "customType": "regex",
-      "description": "zizmor pinned in a workflow run step",
-      "managerFilePatterns": ["/^\\.github/workflows/.+\\.ya?ml$/"],
-      "matchStrings": ["pipx install zizmor==(?<currentValue>[0-9][^\\s\"']*)"],
-      "depNameTemplate": "zizmor",
-      "datasourceTemplate": "pypi"
-    }
+      customType: 'regex',
+      description: 'zizmor pinned in a workflow run step',
+      managerFilePatterns: [
+        '/^\\.github/workflows/.+\\.ya?ml$/',
+      ],
+      matchStrings: [
+        'pipx install zizmor==(?<currentValue>[0-9][^\\s"\']*)',
+      ],
+      depNameTemplate: 'zizmor',
+      datasourceTemplate: 'pypi',
+    },
   ],
-
-  // eBPF-generated bindings and build output are not dependency sources.
-  "ignorePaths": [
-    "**/vendor/**",
-    "**/bin/**",
-    "**/build/**",
-    "**/dist/**",
-    "**/*_bpfel.go",
-    "**/*_bpfeb.go"
-  ]
+  ignorePaths: [
+    '**/vendor/**',
+    '**/bin/**',
+    '**/build/**',
+    '**/dist/**',
+    '**/*_bpfel.go',
+    '**/*_bpfeb.go',
+  ],
 }
